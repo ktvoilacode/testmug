@@ -4,6 +4,12 @@
 
 > **Status**: 🚧 In Active Development (Buildathon Phase)
 
+## Demo Video
+
+[![Testmug Demo](https://img.youtube.com/vi/oXO3ZW489Zw/0.jpg)](https://youtu.be/oXO3ZW489Zw)
+
+Watch the [full demo on YouTube](https://youtu.be/oXO3ZW489Zw) to see Testmug in action!
+
 ---
 
 ## Problem Statement
