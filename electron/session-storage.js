@@ -109,7 +109,8 @@ class SessionStorage {
             duration: session.duration,
             startUrl: session.startUrl,
             customName: session.customName || null,
-            flowAnalysis: analysis // Include flow analysis
+            flowAnalysis: analysis, // Include flow analysis
+            testCaseMetadata: session.testCaseMetadata || null // Include test case metadata
           });
         } catch (error) {
           console.error('[SessionStorage] Error loading session:', file, error);
@@ -210,6 +211,23 @@ class SessionStorage {
 
     const analysisData = fs.readFileSync(analysisFile, 'utf8');
     return JSON.parse(analysisData);
+  }
+
+  /**
+   * Save test case metadata to session
+   */
+  saveTestCaseMetadata(sessionId, metadata) {
+    const sessionFile = path.join(this.sessionsDir, `${sessionId}.json`);
+
+    if (!fs.existsSync(sessionFile)) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+    sessionData.testCaseMetadata = metadata;
+
+    fs.writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2));
+    console.log('[SessionStorage] Saved test case metadata:', sessionId, metadata.testCaseCount, 'tests');
   }
 }
 

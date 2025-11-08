@@ -45,6 +45,8 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionName, setEditingSessionName] = useState('');
+  const [testProgress, setTestProgress] = useState<{total: number, completed: number, passed: number, failed: number} | null>(null);
+  const [runningTestSessionId, setRunningTestSessionId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -318,6 +320,21 @@ function App() {
     };
 
     window.electron.onAssertionAdded(handleAssertionAdded);
+  }, []);
+
+  // Listen for test execution progress
+  useEffect(() => {
+    const handleTestProgress = (progress: {total: number, completed: number, passed: number, failed: number}) => {
+      setTestProgress(progress);
+
+      // Add progress message to chat
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: `⏳ Test Progress: ${progress.completed}/${progress.total} (✅ ${progress.passed} passed, ❌ ${progress.failed} failed)`
+      }]);
+    };
+
+    window.electron.onTestProgress(handleTestProgress);
   }, []);
 
   return (
@@ -669,7 +686,23 @@ function App() {
                               {session.flowAnalysis && session.flowAnalysis.success && (
                                 <> • {session.flowAnalysis.flowCount || 0} flow(s) • {session.flowAnalysis.flows?.reduce((sum: number, f: any) => sum + (f.assertions?.length || 0), 0) || 0} assertion(s)</>
                               )}
+                              {session.testCaseMetadata && session.testCaseMetadata.testCaseCount && (
+                                <> • {session.testCaseMetadata.testCaseCount} tests</>
+                              )}
                             </p>
+
+                            {/* Live test execution status */}
+                            {runningTestSessionId === session.id && testProgress && (
+                              <div className="test-execution-status">
+                                <span className="spinner"></span>
+                                <span className="status-text">
+                                  Running: {testProgress.completed}/{testProgress.total} •
+                                  <span className="status-passed"> ✓ {testProgress.passed}</span> •
+                                  <span className="status-failed"> ✗ {testProgress.failed}</span>
+                                </span>
+                              </div>
+                            )}
+
                             <p className="flow-url">
                               {session.startUrl.substring(0, 60)}{session.startUrl.length > 60 ? '...' : ''}
                             </p>
@@ -677,6 +710,76 @@ function App() {
                               {new Date(session.createdAt).toLocaleString()}
                             </p>
                           </div>
+
+                          {/* Test Case Actions */}
+                          {session.testCaseMetadata && session.testCaseMetadata.testCaseCount > 0 && (
+                            <div className="test-actions">
+                              <button
+                                className="test-action-btn view-tests"
+                                onClick={async () => {
+                                  setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: `📊 Opening test cases Excel file...`
+                                  }]);
+                                  const result = await window.electron.openTestCases(session.id);
+                                  if (!result.success) {
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: `❌ Failed to open Excel: ${result.message}`
+                                    }]);
+                                  }
+                                }}
+                                title="View test cases in Excel"
+                              >
+                                📊 View Tests
+                              </button>
+                              <button
+                                className="test-action-btn regenerate-tests"
+                                onClick={async () => {
+                                  setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: `🔄 Regenerating test cases with AI...`
+                                  }]);
+                                  const result = await window.electron.regenerateTestCases(session.id);
+                                  setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: result.success
+                                      ? `✅ Generated ${result.testCaseCount} new test cases!`
+                                      : `❌ Regeneration failed: ${result.message}`
+                                  }]);
+                                  if (result.success) {
+                                    loadSessions(); // Refresh to show updated count
+                                  }
+                                }}
+                                title="Regenerate test cases using AI"
+                              >
+                                🔄 Regenerate
+                              </button>
+                              <button
+                                className="test-action-btn run-tests"
+                                onClick={async () => {
+                                  setTestProgress(null); // Reset progress
+                                  setRunningTestSessionId(session.id); // Mark this session as running
+                                  setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: `▶️ Running ${session.testCaseMetadata.testCaseCount} test cases...`
+                                  }]);
+                                  const result = await window.electron.runAllTests(session.id);
+                                  setTestProgress(null); // Clear progress when complete
+                                  setRunningTestSessionId(null); // Clear running session
+                                  setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: result.success
+                                      ? `✅ Tests completed: ${result.passed}/${result.total} passed (${result.failed} failed)`
+                                      : `❌ Test execution failed: ${result.message}`
+                                  }]);
+                                }}
+                                title="Run all test cases in parallel"
+                              >
+                                ▶️ Run All
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

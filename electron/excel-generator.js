@@ -5,6 +5,7 @@
 
 const ExcelJS = require('exceljs');
 const path = require('path');
+const fs = require('fs');
 
 class ExcelGenerator {
   constructor() {
@@ -182,13 +183,13 @@ class ExcelGenerator {
       views: [{ state: 'frozen', xSplit: 0, ySplit: 1 }]
     });
 
-    // Define columns
+    // Define columns (wider screenshot column for embedded images with proper aspect ratio)
     sheet.columns = [
       { header: 'Test ID', key: 'testId', width: 10 },
       { header: 'Run Date', key: 'runDate', width: 20 },
       { header: 'Status', key: 'status', width: 12 },
       { header: 'Duration (s)', key: 'duration', width: 12 },
-      { header: 'Screenshot', key: 'screenshot', width: 30 },
+      { header: 'Screenshot', key: 'screenshot', width: 150 }, // Much wider for readable embedded images (16:9 aspect ratio)
       { header: 'Error Message', key: 'error', width: 50 }
     ];
 
@@ -278,19 +279,28 @@ class ExcelGenerator {
     // Clear existing results (keep header)
     sheet.spliceRows(2, sheet.rowCount - 1);
 
-    // Add new results
-    results.forEach(result => {
-      const row = sheet.addRow({
-        testId: result.testId,
-        runDate: new Date().toLocaleString(),
-        status: result.status,
-        duration: result.duration?.toFixed(2),
-        screenshot: result.screenshotPath || '-',
-        error: result.error || '-'
-      });
+    // Set row height for embedded screenshots (larger rows for clear visibility)
+    const screenshotRowHeight = 400; // Height in points (increased from 200 for better visibility)
 
-      // Color code status
-      const statusCell = row.getCell('status');
+    // Add new results
+    // Results sheet columns: 1=Test ID, 2=Run Date, 3=Status, 4=Duration, 5=Screenshot, 6=Error Message
+    let rowIndex = 2; // Start from row 2 (after header)
+
+    for (const result of results) {
+      const row = sheet.addRow([
+        result.testId,
+        new Date().toLocaleString(),
+        result.status,
+        result.duration?.toFixed(2),
+        '', // Leave screenshot column empty for now
+        result.error || '-'
+      ]);
+
+      // Set row height for screenshot
+      row.height = screenshotRowHeight;
+
+      // Color code status (column 3)
+      const statusCell = row.getCell(3);
       if (result.status === 'Pass') {
         statusCell.fill = {
           type: 'pattern',
@@ -307,13 +317,36 @@ class ExcelGenerator {
         statusCell.font = { color: { argb: 'FF991B1B' }, bold: true };
       }
 
-      // Make screenshot a hyperlink if exists
-      if (result.screenshotPath && result.screenshotPath !== '-') {
-        row.getCell('screenshot').value = {
-          text: path.basename(result.screenshotPath),
-          hyperlink: result.screenshotPath
-        };
-        row.getCell('screenshot').font = { color: { argb: 'FF0000FF' }, underline: true };
+      // Embed screenshot image if exists
+      if (result.screenshotPath && result.screenshotPath !== '-' && fs.existsSync(result.screenshotPath)) {
+        try {
+          // Read the image file
+          const imageBuffer = fs.readFileSync(result.screenshotPath);
+
+          // Add image to workbook
+          const imageId = workbook.addImage({
+            buffer: imageBuffer,
+            extension: 'png',
+          });
+
+          // Embed image in the screenshot column (column 5)
+          // Set explicit dimensions: 6 inches wide x 4 inches tall (96 DPI = 576x384 pixels)
+          sheet.addImage(imageId, {
+            tl: { col: 4, row: rowIndex - 1 }, // top-left (0-indexed)
+            ext: { width: 576, height: 384 }, // 6" x 4" at 96 DPI
+            editAs: 'oneCell'
+          });
+
+          // Add a small note in the cell
+          row.getCell(5).value = path.basename(result.screenshotPath);
+          row.getCell(5).alignment = { vertical: 'top', horizontal: 'center' };
+          row.getCell(5).font = { size: 8, color: { argb: 'FF6B7280' } };
+        } catch (imageError) {
+          console.error('[ExcelGenerator] Error embedding screenshot:', imageError.message);
+          row.getCell(5).value = 'Screenshot error';
+        }
+      } else {
+        row.getCell(5).value = '-';
       }
 
       // Add borders
@@ -325,29 +358,32 @@ class ExcelGenerator {
           right: { style: 'thin' }
         };
       });
-    });
+
+      rowIndex++;
+    }
 
     // Update Test Cases sheet status
     const testCasesSheet = workbook.getWorksheet('Test Cases');
     results.forEach(result => {
       testCasesSheet.eachRow((row, rowNumber) => {
-        if (row.getCell('id').value === result.testId) {
-          row.getCell('status').value = result.status;
+        // Column 1 = ID, Column 7 = Status
+        if (row.getCell(1).value === result.testId) {
+          row.getCell(7).value = result.status;
 
           if (result.status === 'Pass') {
-            row.getCell('status').fill = {
+            row.getCell(7).fill = {
               type: 'pattern',
               pattern: 'solid',
               fgColor: { argb: 'FFD1FAE5' }
             };
-            row.getCell('status').font = { color: { argb: 'FF065F46' }, bold: true };
+            row.getCell(7).font = { color: { argb: 'FF065F46' }, bold: true };
           } else if (result.status === 'Fail') {
-            row.getCell('status').fill = {
+            row.getCell(7).fill = {
               type: 'pattern',
               pattern: 'solid',
               fgColor: { argb: 'FFFEE2E2' }
             };
-            row.getCell('status').font = { color: { argb: 'FF991B1B' }, bold: true };
+            row.getCell(7).font = { color: { argb: 'FF991B1B' }, bold: true };
           }
         }
       });

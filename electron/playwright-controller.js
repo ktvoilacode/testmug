@@ -113,6 +113,25 @@ class PlaywrightController {
   isConnected() {
     return this.page !== null && this.replayer !== null;
   }
+
+  /**
+   * Take screenshot of current page
+   * @param {string} filePath - Path to save screenshot
+   */
+  async takeScreenshot(filePath) {
+    if (!this.page) {
+      throw new Error('Not connected to browser. Call connectToBrowserView() first.');
+    }
+
+    try {
+      await this.page.screenshot({ path: filePath, fullPage: false });
+      console.log('[Playwright] Screenshot saved:', filePath);
+      return true;
+    } catch (error) {
+      console.error('[Playwright] Screenshot failed:', error.message);
+      return false;
+    }
+  }
 }
 
 module.exports = PlaywrightController;

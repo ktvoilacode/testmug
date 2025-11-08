@@ -28,6 +28,14 @@ contextBridge.exposeInMainWorld('electron', {
   updateSessionName: (sessionId, name) => ipcRenderer.invoke('update-session-name', sessionId, name),
   deleteSession: (sessionId) => ipcRenderer.invoke('delete-session', sessionId),
 
+  // Test Cases
+  openTestCases: (sessionId) => ipcRenderer.invoke('open-test-cases', sessionId),
+  regenerateTestCases: (sessionId) => ipcRenderer.invoke('regenerate-test-cases', sessionId),
+  runAllTests: (sessionId) => ipcRenderer.invoke('run-all-tests', sessionId),
+
   // Assertions
   onAssertionAdded: (callback) => ipcRenderer.on('assertion-added', (event, data) => callback(data)),
+
+  // Test Progress
+  onTestProgress: (callback) => ipcRenderer.on('test-progress', (event, data) => callback(data)),
 });
