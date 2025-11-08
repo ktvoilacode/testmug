@@ -3,13 +3,15 @@ import {
   MdChevronRight, MdChevronLeft, MdArrowBack, MdArrowForward, MdLock,
   MdRefresh, MdClose, MdHistory, MdDelete, MdPlayArrow,
   MdTableChart, MdLink, MdCalendarToday, MdCode, MdTimer, MdCheckCircle,
-  MdLoop
+  MdLoop, MdFiberManualRecord, MdCheckCircleOutline, MdWarning,
+  MdSmartToy, MdAssessment, MdStars, MdCelebration
 } from 'react-icons/md';
 import './App.css';
 
 interface Message {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
+  role: 'user' | 'assistant' | 'system' | 'session-card';
+  content: string | React.ReactNode;
+  sessionData?: any;
 }
 
 interface RecordedAction {
@@ -52,8 +54,11 @@ function App() {
   const [runningTestSessionId, setRunningTestSessionId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<{total: number, completed: number, current: string} | null>(null);
   const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(null);
+  const [urlHistory, setUrlHistory] = useState<string[]>([]);
+  const [urlSuggestion, setUrlSuggestion] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
 
   const toggleChat = async () => {
     const newShowChat = !showChat;
@@ -113,15 +118,88 @@ function App() {
     });
   }, []);
 
+  // Load URL history from localStorage on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('testmug-url-history');
+    if (savedHistory) {
+      try {
+        setUrlHistory(JSON.parse(savedHistory));
+      } catch (error) {
+        console.error('Failed to load URL history:', error);
+      }
+    }
+  }, []);
+
+  // Generate URL suggestion when user types
+  useEffect(() => {
+    if (url && url.trim() !== '') {
+      const matchingUrl = urlHistory.find(historyUrl =>
+        historyUrl.toLowerCase().startsWith(url.toLowerCase())
+      );
+      if (matchingUrl && matchingUrl.toLowerCase() !== url.toLowerCase()) {
+        setUrlSuggestion(matchingUrl);
+      } else {
+        setUrlSuggestion('');
+      }
+    } else {
+      setUrlSuggestion('');
+    }
+  }, [url, urlHistory]);
+
+  // Save URL to history
+  const saveUrlToHistory = (urlToSave: string) => {
+    if (!urlToSave || urlToSave.trim() === '' || urlToSave.startsWith('file://')) {
+      return;
+    }
+
+    setUrlHistory(prev => {
+      // Remove duplicate if exists
+      const filtered = prev.filter(u => u !== urlToSave);
+      // Add to beginning (most recent first)
+      const updated = [urlToSave, ...filtered].slice(0, 20); // Keep max 20 URLs
+      // Save to localStorage
+      localStorage.setItem('testmug-url-history', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const handleNavigate = async () => {
     try {
       await window.electron.navigate(url);
+      saveUrlToHistory(url);
+      setUrlSuggestion('');
       setMessages(prev => [...prev, {
         role: 'system',
         content: `Navigated to: ${url}`
       }]);
     } catch (error) {
       console.error('Navigation error:', error);
+    }
+  };
+
+  // Handle keyboard navigation with inline autocomplete
+  const handleUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.key === 'Tab' || e.key === 'ArrowRight') && urlSuggestion) {
+      // Check if cursor is at the end of the input
+      const input = e.currentTarget;
+      const cursorAtEnd = input.selectionStart === url.length && input.selectionEnd === url.length;
+
+      if (cursorAtEnd) {
+        e.preventDefault();
+        setUrl(urlSuggestion);
+        setUrlSuggestion('');
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (urlSuggestion && url !== urlSuggestion) {
+        // If there's a suggestion, use it
+        setUrl(urlSuggestion);
+        setTimeout(() => handleNavigate(), 50);
+      } else {
+        handleNavigate();
+      }
+    } else if (e.key === 'Escape') {
+      setUrlSuggestion('');
     }
   };
 
@@ -214,7 +292,12 @@ function App() {
     if (!url || url.trim() === '') {
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `⚠️ Please enter a URL in the address bar before recording.`
+        content: (
+          <span className="message-with-icon">
+            <MdWarning size={16} className="msg-icon warning" />
+            Please enter a URL in the address bar before recording.
+          </span>
+        )
       }]);
       return;
     }
@@ -226,7 +309,12 @@ function App() {
       setDetectedFlows([]);
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `🔴 Recording started. Perform your test actions in the browser.`
+        content: (
+          <span className="message-with-icon">
+            <MdFiberManualRecord size={16} className="msg-icon recording" />
+            Recording started! Perform your test actions in the browser.
+          </span>
+        )
       }]);
     } catch (error) {
       console.error('Recording error:', error);
@@ -241,14 +329,29 @@ function App() {
       if (result.success) {
         setMessages(prev => [...prev, {
           role: 'system',
-          content: `✅ Recording stopped. Captured ${result.actionCount || 0} actions. Session saved: ${result.sessionId}`
+          content: (
+            <span className="message-with-icon">
+              <MdCelebration size={16} className="msg-icon success" />
+              Recording complete! Captured {result.actionCount || 0} action{result.actionCount === 1 ? '' : 's'}.
+            </span>
+          )
         }]);
 
         // Reload sessions to show the new recording
         await loadSessions();
 
-        // Switch to history tab
-        setRightPanelView('history');
+        // Get the newly created session and add it as a mini card in chat
+        const sessionsResult = await window.electron.getSessions();
+        if (sessionsResult.success && sessionsResult.sessions) {
+          const newSession = sessionsResult.sessions.find((s: any) => s.id === result.sessionId);
+          if (newSession) {
+            setMessages(prev => [...prev, {
+              role: 'session-card',
+              content: '',
+              sessionData: newSession
+            }]);
+          }
+        }
       } else {
         setMessages(prev => [...prev, {
           role: 'system',
@@ -283,7 +386,12 @@ function App() {
 
     setMessages(prev => [...prev, {
       role: 'system',
-      content: `🎯 Generating test cases automatically...`
+      content: (
+        <span className="message-with-icon">
+          <MdSmartToy size={16} className="msg-icon info" />
+          Generating test cases automatically...
+        </span>
+      )
     }]);
 
     // Auto-generate with minimal context (empty object)
@@ -298,8 +406,18 @@ function App() {
     setMessages(prev => [...prev, {
       role: 'system',
       content: result.success
-        ? `✅ Generated ${result.testCaseCount} test cases! Open the Excel file to edit/customize.`
-        : `❌ Generation failed: ${result.message}`
+        ? (
+            <span className="message-with-icon">
+              <MdAssessment size={16} className="msg-icon success" />
+              Success! Generated {result.testCaseCount} test case{result.testCaseCount === 1 ? '' : 's'}. Open Excel to view and customize.
+            </span>
+          )
+        : (
+            <span className="message-with-icon">
+              <MdWarning size={16} className="msg-icon warning" />
+              Generation failed: {result.message}
+            </span>
+          )
     }]);
 
     if (result.success) {
@@ -373,13 +491,30 @@ function App() {
   // Listen for assertion additions
   useEffect(() => {
     const handleAssertionAdded = (assertion: any) => {
-      setMessages(prev => [...prev, {
-        role: 'system',
-        content: `🎯 Assertion added: ${assertion.description}`
-      }]);
+      setMessages(prev => {
+        // Prevent duplicate messages
+        const lastMessage = prev[prev.length - 1];
+        if (lastMessage && lastMessage.content === `✨ Assertion added: ${assertion.description}`) {
+          return prev;
+        }
+        return [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdStars size={16} className="msg-icon assertion" />
+              Assertion added: {assertion.description}
+            </span>
+          )
+        }];
+      });
     };
 
     window.electron.onAssertionAdded(handleAssertionAdded);
+
+    // Cleanup function to prevent duplicate listeners
+    return () => {
+      // Note: electron IPC doesn't have removeListener, but preventing duplicates above
+    };
   }, []);
 
   // Listen for test execution progress
@@ -447,14 +582,23 @@ function App() {
               <MdLock size={16} />
             </div>
           )}
-          <input
-            type="text"
-            className="url-input"
-            placeholder="Enter URL..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleNavigate()}
-          />
+          <div className="url-input-wrapper">
+            {urlSuggestion && (
+              <div className="url-suggestion">
+                <span className="url-suggestion-prefix">{url}</span>
+                <span className="url-suggestion-suffix">{urlSuggestion.substring(url.length)}</span>
+              </div>
+            )}
+            <input
+              ref={urlInputRef}
+              type="text"
+              className="url-input"
+              placeholder="Enter URL..."
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={handleUrlKeyDown}
+            />
+          </div>
           <button className="go-button" onClick={handleNavigate}>
             Go
           </button>
@@ -518,7 +662,58 @@ function App() {
                 <div className="chat-container">
                   {messages.map((msg, index) => (
                     <div key={index} className={`message ${msg.role}`}>
-                      <div className="message-content">{msg.content}</div>
+                      {msg.role === 'session-card' && (msg as any).sessionData ? (
+                        <div className="mini-session-card">
+                          <div className="mini-card-header">
+                            <span className="mini-card-title">
+                              {(msg as any).sessionData.customName || ((msg as any).sessionData.startUrl.includes('login') ? '🔐 Login Test' : '🧪 Test Session')}
+                            </span>
+                            <span className="mini-card-id">#{(msg as any).sessionData.id.substring(8, 16)}</span>
+                          </div>
+                          <div className="mini-card-stats">
+                            <span className="mini-stat"><MdCode size={12} /> {(msg as any).sessionData.actionCount} actions</span>
+                            <span className="mini-stat"><MdTimer size={12} /> {Math.round((msg as any).sessionData.duration / 1000)}s</span>
+                            {(msg as any).sessionData.flowAnalysis?.flowCount && (
+                              <span className="mini-stat"><MdLoop size={12} /> {(msg as any).sessionData.flowAnalysis.flowCount} flows</span>
+                            )}
+                          </div>
+                          <div className="mini-card-actions">
+                            <button
+                              className="mini-btn replay"
+                              onClick={async () => {
+                                setMessages(prev => [...prev, {
+                                  role: 'system',
+                                  content: `▶️ Replaying session...`
+                                }]);
+                                const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
+                                setMessages(prev => [...prev, {
+                                  role: 'system',
+                                  content: result.success ? `✅ Replay completed!` : `❌ Replay failed: ${result.message}`
+                                }]);
+                              }}
+                              title="Replay session"
+                            >
+                              <MdPlayArrow size={14} /> Replay
+                            </button>
+                            <button
+                              className="mini-btn generate"
+                              onClick={() => handleGenerateTestCases((msg as any).sessionData)}
+                              title="Generate test cases"
+                            >
+                              <MdTableChart size={14} /> Generate Tests
+                            </button>
+                            <button
+                              className="mini-btn details"
+                              onClick={() => setRightPanelView('history')}
+                              title="View in history"
+                            >
+                              <MdHistory size={14} /> Details
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="message-content">{msg.content}</div>
+                      )}
                     </div>
                   ))}
                   <div ref={chatEndRef} />
