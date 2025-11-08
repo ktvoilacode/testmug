@@ -311,7 +311,27 @@ ipcMain.handle('stop-recording', async () => {
 
     console.log('[Recording] Session saved:', sessionId);
     console.log('[Recording] Playwright script:', specFile);
-    console.log('[Recording] Test case generation is now manual - use "Generate Test Cases" button');
+
+    // Analyze flows with AI (for replay functionality) but DON'T generate test cases yet
+    if (flowAnalyzer) {
+      console.log('[Recording] Analyzing flows for replay...');
+      flowAnalyzer.analyzeSession(session)
+        .then(async analysis => {
+          if (analysis.success) {
+            // Save analysis with session
+            sessionStorage.saveFlowAnalysis(sessionId, analysis);
+            console.log('[Recording] Flow analysis complete:', analysis.flowCount, 'flows detected');
+
+            // Generate flow-specific Playwright scripts
+            console.log('[Recording] Generating flow-specific Playwright scripts...');
+            const flowScripts = generateFlowScripts(session, analysis);
+            const savedScripts = saveFlowScripts(sessionId, flowScripts, sessionStorage.sessionsDir);
+            console.log(`[Recording] Generated ${savedScripts.length} flow script(s)`);
+            console.log('[Recording] ✅ Use "Generate Test Cases" button to create test cases with context');
+          }
+        })
+        .catch(err => console.error('[Recording] Flow analysis error:', err.message));
+    }
 
     return {
       success: true,

@@ -848,50 +848,48 @@ function App() {
                             )}
 
                             {/* Replay Section */}
-                            {session.flowAnalysis && session.flowAnalysis.flows && session.flowAnalysis.flows.length > 0 && (
-                              <div className="replay-section">
-                                <div className="replay-label"><MdPlayArrow size={14} /> Replay</div>
-                                <div className="replay-buttons">
+                            <div className="replay-section">
+                              <div className="replay-label"><MdPlayArrow size={14} /> Replay</div>
+                              <div className="replay-buttons">
+                                <button
+                                  className="replay-btn all"
+                                  onClick={async () => {
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: `▶️ Replaying full session...`
+                                    }]);
+                                    const result = await window.electron.replaySession(session.id, 'normal');
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: result.success ? `✅ Replay completed!` : `❌ Replay failed: ${result.message}`
+                                    }]);
+                                  }}
+                                  title="Replay entire session"
+                                >
+                                  All
+                                </button>
+                                {session.flowAnalysis && session.flowAnalysis.flows && session.flowAnalysis.flows.map((flow: any, idx: number) => (
                                   <button
-                                    className="replay-btn all"
+                                    key={idx}
+                                    className={`replay-btn ${flow.type}`}
                                     onClick={async () => {
                                       setMessages(prev => [...prev, {
                                         role: 'system',
-                                        content: `▶️ Replaying full session...`
+                                        content: `▶️ Replaying ${flow.name}...`
                                       }]);
-                                      const result = await window.electron.replaySession(session.id, 'normal');
+                                      const result = await window.electron.replayFlow(session.id, flow.flowId);
                                       setMessages(prev => [...prev, {
                                         role: 'system',
-                                        content: result.success ? `✅ Replay completed!` : `❌ Replay failed: ${result.message}`
+                                        content: result.success ? `✅ ${flow.name} completed!` : `❌ Replay failed: ${result.message}`
                                       }]);
                                     }}
-                                    title="Replay entire session"
+                                    title={`Replay ${flow.name} (${flow.type})`}
                                   >
-                                    All
+                                    {flow.name}
                                   </button>
-                                  {session.flowAnalysis.flows.map((flow: any, idx: number) => (
-                                    <button
-                                      key={idx}
-                                      className={`replay-btn ${flow.type}`}
-                                      onClick={async () => {
-                                        setMessages(prev => [...prev, {
-                                          role: 'system',
-                                          content: `▶️ Replaying ${flow.name}...`
-                                        }]);
-                                        const result = await window.electron.replayFlow(session.id, flow.flowId);
-                                        setMessages(prev => [...prev, {
-                                          role: 'system',
-                                          content: result.success ? `✅ ${flow.name} completed!` : `❌ Replay failed: ${result.message}`
-                                        }]);
-                                      }}
-                                      title={`Replay ${flow.name} (${flow.type})`}
-                                    >
-                                      {flow.name}
-                                    </button>
-                                  ))}
-                                </div>
+                                ))}
                               </div>
-                            )}
+                            </div>
                           </div>
 
                           {/* Card Footer - Test Actions */}
