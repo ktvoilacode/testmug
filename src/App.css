@@ -1336,20 +1336,22 @@ body {
 /* Note: The browser view is rendered natively by Electron BrowserView */
 /* It will be positioned to account for top bar (52px) and left panel (30%) */
 
-/* Context Modal */
+/* Context Modal - Inside Chat Panel */
 .modal-overlay {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(4px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  z-index: 10000;
+  z-index: 1000;
   animation: fadeIn 0.2s ease;
+  overflow-y: auto;
+  padding: 16px;
 }
 
 @keyframes fadeIn {
@@ -1363,19 +1365,20 @@ body {
 
 .context-modal {
   background: #ffffff;
-  border-radius: 16px;
-  width: 90%;
-  max-width: 650px;
-  max-height: 85vh;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+  animation: slideDown 0.3s ease;
+  margin-top: 0;
 }
 
-@keyframes slideUp {
+@keyframes slideDown {
   from {
-    transform: translateY(30px);
+    transform: translateY(-20px);
     opacity: 0;
   }
   to {
@@ -1388,22 +1391,24 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border-radius: 12px 12px 0 0;
 }
 
 .modal-header h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: #ffffff;
 }
 
 .modal-close {
   background: none;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.9);
   padding: 4px;
   border-radius: 6px;
   display: flex;
@@ -1413,17 +1418,18 @@ body {
 }
 
 .modal-close:hover {
-  background: #f3f4f6;
-  color: #111827;
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
 }
 
 .modal-body {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  max-height: calc(100vh - 300px);
 }
 
 .modal-section {
@@ -1531,8 +1537,9 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  padding: 16px 24px;
+  padding: 16px 20px;
   border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
 }
 
 .modal-btn {

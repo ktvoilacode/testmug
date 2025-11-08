@@ -278,6 +278,12 @@ function App() {
   const handleOpenContextModal = (session: any) => {
     setContextModalSession(session);
 
+    // Switch to history view and show chat panel
+    setRightPanelView('history');
+    if (!showChat) {
+      toggleChat();
+    }
+
     // Pre-fill form with detected field values and saved context
     const formMetadata = session.formMetadata;
     const savedContext = session.testContext;
@@ -986,15 +992,9 @@ function App() {
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Right Panel - Browser View (handled by Electron BrowserView) */}
-        {/* The browser view is rendered natively by Electron, not React */}
-      </div>
-
-      {/* Context Modal */}
-      {showContextModal && contextModalSession && (
+            {/* Context Modal - Inside Chat Panel */}
+            {showContextModal && contextModalSession && (
         <div className="modal-overlay" onClick={handleCloseContextModal}>
           <div className="context-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
@@ -1118,6 +1118,12 @@ function App() {
           </div>
         </div>
       )}
+          </div>
+        )}
+
+        {/* Right Panel - Browser View (handled by Electron BrowserView) */}
+        {/* The browser view is rendered natively by Electron, not React */}
+      </div>
     </div>
   );
 }
