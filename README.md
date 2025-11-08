@@ -1,277 +1,145 @@
 # Testmug
 
-**AI-Powered Testing Tool for Manual Testers**
+**Superpowers for Manual Testers - AI-Powered Test Case Generation & Execution**
 
-> **Status**: 🚧 In Active Development (Buildathon Phase)
+> 🖥️ **Desktop-Native Application** | No live URL - Available for demo at the desk!
 
-## Demo Video
+---
+
+## 🎥 Demo Video
 
 [![Testmug Demo](https://img.youtube.com/vi/oXO3ZW489Zw/0.jpg)](https://youtu.be/oXO3ZW489Zw)
 
-Watch the [full demo on YouTube](https://youtu.be/oXO3ZW489Zw) to see Testmug in action!
+**[Watch Full Demo →](https://youtu.be/oXO3ZW489Zw)**
 
 ---
 
-## Problem Statement
+## 💡 The Problem
 
-**Current automation solved execution speed. Nobody solved test design labor.**
+**Manual testers waste 90% of their time writing test cases instead of actually testing.**
 
-The real bottleneck? **Not execution. Design.**
+- Enterprises spend **$20-30B annually** on manual testing (56% of all testing spend)
+- Current automation tools require coding skills
+- **Nobody solved test design labor** - only execution speed
 
-Manual testers waste 90% of their time on repetitive test case documentation instead of actual testing. Enterprises pour **$20-30B annually** into manual testing—**56% of all testing spend**. Current automation tools require coding skills and don't solve the test design problem—they only address execution speed.
-
----
-
-## Users & Context
-
-**Primary Users**: Manual QA Testers at mid-market to enterprise companies
-- No coding background required
-- Responsible for functional, regression, and exploratory testing
-- Frustrated with repetitive test documentation
-- Need to increase test coverage without additional effort
-
-**Use Case**: A manual tester needs to test a login flow. Instead of manually writing 50 test cases covering positive scenarios, edge cases, and negative scenarios, they record one positive flow and let AI generate comprehensive test suites in minutes.
+**Example**: Testing a login flow requires writing 50+ test cases covering positive, negative, and edge scenarios. This takes hours of repetitive documentation work.
 
 ---
 
-## Solution Overview
+## ✨ Our Solution
 
-**85% of testing requires human judgment and never goes away.** Instead of fighting that reality, we amplify manual testers with AI.
+**Testmug = Record Once → AI Generates 50 Test Cases → Auto-Execute → Get Reports**
 
-Testmug is a desktop-native application that empowers manual testers to generate and execute comprehensive test suites from recorded user flows, reducing test creation time by 90%.
-
-**Inspired by**: Lovable/Bolt.new proved "describe intent → AI builds it" works for non-coders. We apply this to test design.
+A desktop application that lets manual testers (no coding required) generate comprehensive test suites from recorded user flows, reducing test creation time by **90%**.
 
 ### How It Works
 
 ```
-1. Record positive test case (happy path)
-   ↓
-2. Optional: Record negative test case
-   ↓
-3. Optional: Record edge case
-   ↓
-4. AI generates 10-50 test cases in Excel
-   ↓
-5. Edit Excel if needed
-   ↓
-6. Run tests in parallel (Playwright)
-   ↓
-7. Get reports (Excel + Word) with screenshots
+Record one happy path flow (2 min)
+         ↓
+AI generates 10-50 test cases (1 min)
+         ↓
+Edit in Excel if needed (optional)
+         ↓
+Run all tests in parallel (5 min)
+         ↓
+Get Excel + Word reports with screenshots
 ```
 
-### Architecture Diagram
-
-```
-┌─────────────────────────────────────────────┐
-│       Electron Desktop App                   │
-│  ┌─────────────────────────────────────┐   │
-│  │  Embedded Browser (Chromium)        │   │
-│  │  • DOM Event Capture                │   │
-│  │  • Visual Highlighting              │   │
-│  └─────────────────────────────────────┘   │
-│                    ↓                         │
-│  ┌─────────────────────────────────────┐   │
-│  │  Recording Engine                   │   │
-│  │  • Click/Input/Navigate capture     │   │
-│  │  • Multi-selector generation        │   │
-│  └─────────────────────────────────────┘   │
-│                    ↓                         │
-│  ┌─────────────────────────────────────┐   │
-│  │  AI Test Generator                  │   │
-│  │  • OpenAI GPT-4 / Mistral AI        │   │
-│  │  • Generates 10-50 test cases       │   │
-│  └─────────────────────────────────────┘   │
-│                    ↓                         │
-│  ┌─────────────────────────────────────┐   │
-│  │  Playwright Test Runner             │   │
-│  │  • Parallel execution (3-5 threads) │   │
-│  │  • Screenshot capture               │   │
-│  └─────────────────────────────────────┘   │
-│                    ↓                         │
-│  ┌─────────────────────────────────────┐   │
-│  │  Report Generator                   │   │
-│  │  • Excel with results               │   │
-│  │  • Word with screenshots            │   │
-│  └─────────────────────────────────────┘   │
-└─────────────────────────────────────────────┘
-```
+**Inspiration**: Lovable/Bolt.new proved "describe intent → AI builds it" works for non-coders. We apply this to test design.
 
 ---
 
-## Setup & Run
+## 🚀 Current Features
 
-### Prerequisites
+✅ **Visual Recording** - Click, type, navigate in embedded browser
+✅ **AI Test Generation** - GPT-4/Groq generates 10+ test cases with edge cases
+✅ **Smart Execution** - Playwright runs tests in parallel with self-healing selectors
+✅ **Professional Reports** - Excel with results + Word with screenshots
+✅ **Chat Interface** - Natural language commands ("run tests", "open report")
+✅ **Flow Analysis** - AI identifies reusable test flows
+✅ **Session Management** - Track, replay, and manage test sessions
 
-- Node.js 20+
-- npm or yarn
-- OpenAI API key or Mistral AI API key
+---
 
-### Installation Steps
+## 🛠️ Tech Stack
+
+**Frontend**
+- React 18 + TypeScript
+- Vite (fast build tool)
+
+**Desktop Framework**
+- Electron (cross-platform desktop app)
+- BrowserView (embedded Chromium for recording)
+
+**AI & Testing**
+- OpenAI GPT-4 / Groq API (test generation)
+- Playwright (test execution engine)
+
+**File Generation**
+- ExcelJS (Excel reports)
+- docx (Word reports with screenshots)
+
+**Storage**
+- Local file system (recordings, test cases, results)
+- SQLite-based session storage
+
+---
+
+## 📦 Quick Start
 
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/ktvoilacode/testmug.git
 cd testmug
 
 # 2. Install dependencies
 npm install
 
-# 3. Set up environment variables
+# 3. Set up API key
 cp .env.example .env
-# Add your OpenAI/Mistral API key to .env file
+# Add your GROQ_API_KEY or OPENAI_API_KEY
 
-# 4. Run in development mode
+# 4. Run
 npm run dev
-
-# 5. Build for production
-npm run build
 ```
 
-### Quick Start
+### Usage
 
-1. Launch Testmug
-2. Enter a URL to test
-3. Click "Record Positive" and perform actions
+1. Launch Testmug (desktop app opens)
+2. Enter website URL
+3. Click "Record" and perform actions
 4. Stop recording
-5. Click "Generate Test Cases"
-6. Review Excel file with AI-generated tests
-7. Click "Run Tests"
-8. View Excel/Word reports with results
+5. Click "Generate Tests" (AI creates test suite)
+6. Review Excel file
+7. Click "Run Tests" (parallel execution)
+8. View reports with screenshots
 
 ---
 
-## Models & Data
+## 🎯 Why Desktop-Native?
 
-### AI Models
-- **Primary**: OpenAI GPT-4 (for test case generation)
-- **Alternative**: Mistral AI Large (mistral-large-latest)
+- ✅ No browser extension permissions needed
+- ✅ Full control over embedded browser
+- ✅ Native file system access (Excel, screenshots)
+- ✅ Works offline (after recordings)
+- ✅ No data leaves user's machine (privacy)
 
-### Data Sources
-- **Recording Data**: DOM structure, element selectors, user actions
-- **Test Cases**: AI-generated test scenarios stored in Excel format
-- **Results**: Test execution results, screenshots, error logs
-
-### File Structure
-```
-/testmug/
-├── recordings/             # JSON recording files (local storage)
-├── test-cases/            # AI-generated Excel files
-├── results/               # Test execution results
-│   ├── screenshots/       # Test evidence
-│   ├── *.xlsx            # Updated Excel reports
-│   └── *.docx            # Word reports
-└── config/
-    └── settings.json      # App settings (API keys encrypted)
-```
-
-### Licenses
-- **Testmug**: MIT License
-- **Dependencies**:
-  - Electron (MIT)
-  - React (MIT)
-  - Playwright (Apache 2.0)
-  - ExcelJS (MIT)
-  - docx (MIT)
+**Note**: This is a desktop application, not a web app. No live URL available - visit our demo desk to see it in action!
 
 ---
 
-## Evaluation & Guardrails
+## 👤 Team
 
-### Quality Assurance
-- **Recording Accuracy**: Multi-selector strategy (ID, data-testid, aria-label, xpath) ensures self-healing tests
-- **AI Validation**: Generated test cases are validated for:
-  - Completeness (all steps included)
-  - Feasibility (actionable test steps)
-  - Coverage (positive, negative, edge cases)
-- **Execution Reliability**: Retry logic with alternative selectors if primary selector fails
-
-### Hallucination/Bias Mitigations
-- **Grounded Generation**: AI receives actual DOM structure and recorded actions as context
-- **Template Validation**: Test cases must match predefined JSON structure
-- **Fallback Mechanism**: If AI fails, use template-based test generation
-- **Human Review**: Excel editing allows manual correction before execution
-- **Execution Evidence**: Screenshots prove actual test behavior, not just AI assumptions
-
-### Performance Metrics
-- **Recording**: <2% browser performance overhead
-- **AI Generation**: <2 minutes for 20 test cases
-- **Parallel Execution**: 5 concurrent tests, 20 tests in <5 minutes
-- **Report Generation**: <30 seconds for Excel + Word
-
----
-
-## Known Limitations & Risks
-
-### Current Limitations
-- **Browser Support**: Chromium-only (no Firefox/Safari in MVP)
-- **Complex Interactions**: May not capture: drag-and-drop, canvas interactions, file uploads (to be improved)
-- **Dynamic Content**: AJAX-heavy SPAs may need manual waits
-- **Test Coverage**: AI generates 10-20 tests in MVP (50+ post-buildathon)
-- **Local Execution**: No cloud sync or team collaboration in MVP
-
-### Risks & Mitigation
-
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|------------|------------|
-| AI-generated tests are low quality | High | Medium | Fine-tune prompts, allow manual editing, user feedback loop |
-| Playwright can't capture complex interactions | Medium | Medium | Support manual script editing, fallback to template-based generation |
-| OpenAI API costs too high | Medium | Low | Offer Mistral AI alternative, local LLM in future |
-| Element selectors break on app updates | High | High | Multi-selector strategy with self-healing fallback |
-| Low user adoption | High | Medium | Freemium model, Product Hunt launch, demo videos |
-
-### Future Improvements
-- Local LLM support (no API dependency)
-- Multi-browser support (Firefox, Safari, Edge)
-- API testing capabilities
-- Team collaboration features
-- CI/CD integration
-
----
-
-## Team
-
-**Krishna Teja**
-Role: Founder & Developer
+**Krishna Teja** - Solo Developer
 GitHub: [@ktvoilacode](https://github.com/ktvoilacode)
-Contact: Available via GitHub
 
 ---
 
-## Roadmap
-
-### MVP (Buildathon - 48 hours) ✅ In Progress
-- Basic recording (positive/negative/edge)
-- AI test generation (10-20 cases)
-- Parallel execution
-- Excel + Word reports
-
-### Post-MVP (Q1 2026)
-- 50+ test case generation
-- Video recording
-- Advanced Excel editing UI
-- Local LLM support
-- Multi-project management
-
-### Future (Q2-Q3 2026)
-- Team collaboration
-- CI/CD integration
-- API testing
-- Mobile testing (Appium)
-- Cloud sync
-
----
-
-## Contributing
-
-This is currently a solo buildathon project. Contributions welcome after MVP release!
-
----
-
-## License
+## 📄 License
 
 MIT License - See LICENSE file for details
 
 ---
 
-**Built for Buildathon 2025 - Empowering manual testers worldwide!**
+**Built for Buildathon 2025 🚀**
