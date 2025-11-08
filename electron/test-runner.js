@@ -87,7 +87,7 @@ class TestRunner {
           batch.map(testCase => this.runSingleTestWithBrowser(testCase, session, flowAnalysis, screenshotsDir, mainWindow))
         );
 
-        // Add results one by one with a small delay for smooth UI updates
+        // Add results one by one with 1 second delay for smooth UI updates
         for (const result of batchResults) {
           results.push(result);
 
@@ -101,8 +101,8 @@ class TestRunner {
             mainWindow.webContents.send('test-progress', { ...this.currentProgress });
           }
 
-          // Small delay for smooth UI updates (150ms per test)
-          await new Promise(resolve => setTimeout(resolve, 150));
+          // 1 second delay for smooth UI updates (user can see each count)
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
         console.log(`[TestRunner] Progress: ${this.currentProgress.completed}/${this.currentProgress.total} (${this.currentProgress.passed} passed, ${this.currentProgress.failed} failed)`);

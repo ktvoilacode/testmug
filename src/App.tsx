@@ -1,5 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MdChevronRight, MdChevronLeft, MdArrowBack, MdArrowForward, MdLock, MdRefresh, MdClose, MdSettings, MdHistory } from 'react-icons/md';
+import {
+  MdChevronRight, MdChevronLeft, MdArrowBack, MdArrowForward, MdLock,
+  MdRefresh, MdClose, MdSettings, MdHistory, MdDelete, MdPlayArrow,
+  MdTableChart, MdLink, MdCalendarToday, MdCode, MdTimer, MdCheckCircle,
+  MdLoop
+} from 'react-icons/md';
 import './App.css';
 
 interface Message {
@@ -47,6 +52,8 @@ function App() {
   const [editingSessionName, setEditingSessionName] = useState('');
   const [testProgress, setTestProgress] = useState<{total: number, completed: number, passed: number, failed: number} | null>(null);
   const [runningTestSessionId, setRunningTestSessionId] = useState<string | null>(null);
+  const [generationProgress, setGenerationProgress] = useState<{total: number, completed: number, current: string} | null>(null);
+  const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -337,6 +344,15 @@ function App() {
     window.electron.onTestProgress(handleTestProgress);
   }, []);
 
+  // Listen for test generation progress
+  useEffect(() => {
+    const handleGenerationProgress = (progress: {total: number, completed: number, current: string}) => {
+      setGenerationProgress(progress);
+    };
+
+    window.electron.onGenerationProgress(handleGenerationProgress);
+  }, []);
+
   return (
     <div className="app">
       {/* Top Address Bar */}
@@ -593,129 +609,191 @@ function App() {
                         <p className="flows-subtitle">Click replay to see your test in action</p>
                       </div>
                       {sessions.map((session) => (
-                        <div key={session.id} className="flow-card">
-                          <div className="flow-header">
-                            <div className="flow-info">
-                              <div className="session-title">
-                                {editingSessionId === session.id ? (
-                                  <input
-                                    type="text"
-                                    className="session-name-input"
-                                    value={editingSessionName}
-                                    onChange={(e) => setEditingSessionName(e.target.value)}
-                                    onBlur={() => handleSaveSessionName(session.id)}
-                                    onKeyPress={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleSaveSessionName(session.id);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingSessionId(null);
-                                      }
-                                    }}
-                                    autoFocus
-                                  />
-                                ) : (
-                                  <h4
-                                    onClick={() => handleEditSessionName(
-                                      session.id,
-                                      session.customName || (session.startUrl.includes('login') ? '🔐 Login Test' : '🧪 Test Session')
-                                    )}
-                                    title="Click to edit name"
-                                    className="editable-title"
-                                  >
-                                    {session.customName || (session.startUrl.includes('login') ? '🔐 Login Test' : '🧪 Test Session')}
-                                  </h4>
-                                )}
-                                <span className="session-id">#{session.id.substring(8, 16)}</span>
-                                <button
-                                  className="delete-session-btn"
-                                  onClick={() => handleDeleteSession(
-                                    session.id,
-                                    session.customName || (session.startUrl.includes('login') ? 'Login Test' : 'Test Session')
-                                  )}
-                                  title="Delete session"
-                                >
-                                  🗑️
-                                </button>
-                              </div>
-                            </div>
-                            <div className="replay-buttons">
-                              <button
-                                className="replay-btn"
-                                onClick={async () => {
-                                  setMessages(prev => [...prev, {
-                                    role: 'system',
-                                    content: `▶️ Replaying full session...`
-                                  }]);
-                                  const result = await window.electron.replaySession(session.id, 'normal');
-                                  setMessages(prev => [...prev, {
-                                    role: 'system',
-                                    content: result.success ? `✅ Replay completed!` : `❌ Replay failed: ${result.message}`
-                                  }]);
-                                }}
-                                title="Replay entire session"
-                              >
-                                ▶️ All
-                              </button>
-
-                              {/* Individual flow replay buttons */}
-                              {session.flowAnalysis && session.flowAnalysis.flows && session.flowAnalysis.flows.map((flow: any, idx: number) => (
-                                <button
-                                  key={idx}
-                                  className={`replay-btn flow-replay ${flow.type}`}
-                                  onClick={async () => {
-                                    setMessages(prev => [...prev, {
-                                      role: 'system',
-                                      content: `▶️ Replaying ${flow.name}...`
-                                    }]);
-                                    const result = await window.electron.replayFlow(session.id, flow.flowId);
-                                    setMessages(prev => [...prev, {
-                                      role: 'system',
-                                      content: result.success ? `✅ ${flow.name} completed!` : `❌ Replay failed: ${result.message}`
-                                    }]);
+                        <div key={session.id} className="session-card">
+                          {/* Card Header */}
+                          <div className="card-header">
+                            <div className="title-row">
+                              {editingSessionId === session.id ? (
+                                <input
+                                  type="text"
+                                  className="session-name-input"
+                                  value={editingSessionName}
+                                  onChange={(e) => setEditingSessionName(e.target.value)}
+                                  onBlur={() => handleSaveSessionName(session.id)}
+                                  onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleSaveSessionName(session.id);
+                                    } else if (e.key === 'Escape') {
+                                      setEditingSessionId(null);
+                                    }
                                   }}
-                                  title={`Replay ${flow.name} (${flow.type})`}
+                                  autoFocus
+                                />
+                              ) : (
+                                <h4
+                                  onClick={() => handleEditSessionName(
+                                    session.id,
+                                    session.customName || (session.startUrl.includes('login') ? '🔐 Login Test' : '🧪 Test Session')
+                                  )}
+                                  title="Click to edit name"
+                                  className="card-title"
                                 >
-                                  {flow.type === 'positive' ? '✓' : '✗'} {flow.name}
-                                </button>
-                              ))}
+                                  {session.customName || (session.startUrl.includes('login') ? '🔐 Login Test' : '🧪 Test Session')}
+                                </h4>
+                              )}
+                              <button
+                                className="delete-btn"
+                                onClick={() => handleDeleteSession(
+                                  session.id,
+                                  session.customName || (session.startUrl.includes('login') ? 'Login Test' : 'Test Session')
+                                )}
+                                title="Delete session"
+                              >
+                                <MdDelete />
+                              </button>
                             </div>
-                          </div>
-                          <div className="flow-details">
-                            <p className="flow-actions">
-                              {session.actionCount} actions • {Math.round(session.duration / 1000)}s duration
+                            <div className="meta-row">
+                              <span className="session-badge">#{session.id.substring(8, 16)}</span>
+                              <span className="meta-item">
+                                <MdCode size={14} /> {session.actionCount} actions
+                              </span>
+                              <span className="meta-item">
+                                <MdTimer size={14} /> {Math.round(session.duration / 1000)}s
+                              </span>
                               {session.flowAnalysis && session.flowAnalysis.success && (
-                                <> • {session.flowAnalysis.flowCount || 0} flow(s) • {session.flowAnalysis.flows?.reduce((sum: number, f: any) => sum + (f.assertions?.length || 0), 0) || 0} assertion(s)</>
+                                <>
+                                  <span className="meta-item">
+                                    <MdLoop size={14} /> {session.flowAnalysis.flowCount || 0} flows
+                                  </span>
+                                  <span className="meta-item">
+                                    <MdCheckCircle size={14} /> {session.flowAnalysis.flows?.reduce((sum: number, f: any) => sum + (f.assertions?.length || 0), 0) || 0} assertions
+                                  </span>
+                                </>
                               )}
                               {session.testCaseMetadata && session.testCaseMetadata.testCaseCount && (
-                                <> • {session.testCaseMetadata.testCaseCount} tests</>
-                              )}
-                            </p>
-
-                            {/* Live test execution status */}
-                            {runningTestSessionId === session.id && testProgress && (
-                              <div className="test-execution-status">
-                                <span className="spinner"></span>
-                                <span className="status-text">
-                                  Running: {testProgress.completed}/{testProgress.total} •
-                                  <span className="status-passed"> ✓ {testProgress.passed}</span> •
-                                  <span className="status-failed"> ✗ {testProgress.failed}</span>
+                                <span className="meta-item tests">
+                                  <MdTableChart size={14} /> {session.testCaseMetadata.testCaseCount} tests
                                 </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Card Body */}
+                          <div className="card-body">
+                            <div className="info-row">
+                              <span className="info-label"><MdLink size={14} /> URL</span>
+                              <span
+                                className="info-value clickable"
+                                onClick={async () => {
+                                  await window.electron.navigate(session.startUrl);
+                                }}
+                                title={`Click to navigate to ${session.startUrl}`}
+                              >
+                                {session.startUrl.substring(0, 60)}{session.startUrl.length > 60 ? '...' : ''}
+                              </span>
+                            </div>
+                            <div className="info-row">
+                              <span className="info-label"><MdCalendarToday size={14} /> Created</span>
+                              <span className="info-value">
+                                {new Date(session.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+
+                            {/* Test Generation Progress */}
+                            {generatingSessionId === session.id && generationProgress && (
+                              <div className="progress-bar generation">
+                                <div className="progress-header">
+                                  <span className="progress-label">
+                                    <span className="spinner-dot"></span>
+                                    {generationProgress.current}
+                                  </span>
+                                </div>
+                                <div className="progress-track">
+                                  <div
+                                    className="progress-fill"
+                                    style={{ width: `${(generationProgress.completed / generationProgress.total) * 100}%` }}
+                                  ></div>
+                                </div>
                               </div>
                             )}
 
-                            <p className="flow-url">
-                              {session.startUrl.substring(0, 60)}{session.startUrl.length > 60 ? '...' : ''}
-                            </p>
-                            <p className="flow-time">
-                              {new Date(session.createdAt).toLocaleString()}
-                            </p>
+                            {/* Live Test Progress */}
+                            {runningTestSessionId === session.id && testProgress && (
+                              <div className="progress-bar">
+                                <div className="progress-header">
+                                  <span className="progress-label">
+                                    <span className="spinner-dot"></span>
+                                    Running Tests
+                                  </span>
+                                  <span className="progress-count">
+                                    {testProgress.completed}/{testProgress.total}
+                                  </span>
+                                </div>
+                                <div className="progress-track">
+                                  <div
+                                    className="progress-fill"
+                                    style={{ width: `${(testProgress.completed / testProgress.total) * 100}%` }}
+                                  ></div>
+                                </div>
+                                <div className="progress-stats">
+                                  <span className="stat-passed">✓ {testProgress.passed} passed</span>
+                                  <span className="stat-failed">✗ {testProgress.failed} failed</span>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Replay Section */}
+                            {session.flowAnalysis && session.flowAnalysis.flows && session.flowAnalysis.flows.length > 0 && (
+                              <div className="replay-section">
+                                <div className="replay-label"><MdPlayArrow size={14} /> Replay</div>
+                                <div className="replay-buttons">
+                                  <button
+                                    className="replay-btn all"
+                                    onClick={async () => {
+                                      setMessages(prev => [...prev, {
+                                        role: 'system',
+                                        content: `▶️ Replaying full session...`
+                                      }]);
+                                      const result = await window.electron.replaySession(session.id, 'normal');
+                                      setMessages(prev => [...prev, {
+                                        role: 'system',
+                                        content: result.success ? `✅ Replay completed!` : `❌ Replay failed: ${result.message}`
+                                      }]);
+                                    }}
+                                    title="Replay entire session"
+                                  >
+                                    All
+                                  </button>
+                                  {session.flowAnalysis.flows.map((flow: any, idx: number) => (
+                                    <button
+                                      key={idx}
+                                      className={`replay-btn ${flow.type}`}
+                                      onClick={async () => {
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: `▶️ Replaying ${flow.name}...`
+                                        }]);
+                                        const result = await window.electron.replayFlow(session.id, flow.flowId);
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: result.success ? `✅ ${flow.name} completed!` : `❌ Replay failed: ${result.message}`
+                                        }]);
+                                      }}
+                                      title={`Replay ${flow.name} (${flow.type})`}
+                                    >
+                                      {flow.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Test Case Actions */}
+                          {/* Card Footer - Test Actions */}
                           {session.testCaseMetadata && session.testCaseMetadata.testCaseCount > 0 && (
-                            <div className="test-actions">
+                            <div className="card-footer">
                               <button
-                                className="test-action-btn view-tests"
+                                className="action-btn primary"
                                 onClick={async () => {
                                   setMessages(prev => [...prev, {
                                     role: 'system',
@@ -731,16 +809,29 @@ function App() {
                                 }}
                                 title="View test cases in Excel"
                               >
-                                📊 View Tests
+                                <MdTableChart size={16} /> View Test Cases
                               </button>
                               <button
-                                className="test-action-btn regenerate-tests"
+                                className="action-btn secondary"
                                 onClick={async () => {
+                                  // Immediately show generation progress
+                                  setGeneratingSessionId(session.id);
+                                  setGenerationProgress({
+                                    total: session.flowAnalysis?.flowCount || 1,
+                                    completed: 0,
+                                    current: 'Starting generation...'
+                                  });
+
                                   setMessages(prev => [...prev, {
                                     role: 'system',
                                     content: `🔄 Regenerating test cases with AI...`
                                   }]);
+
                                   const result = await window.electron.regenerateTestCases(session.id);
+
+                                  setGenerationProgress(null); // Clear progress when complete
+                                  setGeneratingSessionId(null); // Clear generating session
+
                                   setMessages(prev => [...prev, {
                                     role: 'system',
                                     content: result.success
@@ -753,18 +844,27 @@ function App() {
                                 }}
                                 title="Regenerate test cases using AI"
                               >
-                                🔄 Regenerate
+                                <MdRefresh size={18} />
                               </button>
                               <button
-                                className="test-action-btn run-tests"
+                                className="action-btn success"
                                 onClick={async () => {
-                                  setTestProgress(null); // Reset progress
-                                  setRunningTestSessionId(session.id); // Mark this session as running
+                                  // Immediately show status bar with initial progress
+                                  setRunningTestSessionId(session.id);
+                                  setTestProgress({
+                                    total: session.testCaseMetadata.testCaseCount,
+                                    completed: 0,
+                                    passed: 0,
+                                    failed: 0
+                                  });
+
                                   setMessages(prev => [...prev, {
                                     role: 'system',
                                     content: `▶️ Running ${session.testCaseMetadata.testCaseCount} test cases...`
                                   }]);
+
                                   const result = await window.electron.runAllTests(session.id);
+
                                   setTestProgress(null); // Clear progress when complete
                                   setRunningTestSessionId(null); // Clear running session
                                   setMessages(prev => [...prev, {
@@ -776,7 +876,7 @@ function App() {
                                 }}
                                 title="Run all test cases in parallel"
                               >
-                                ▶️ Run All
+                                <MdPlayArrow size={16} /> Run Tests
                               </button>
                             </div>
                           )}

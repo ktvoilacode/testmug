@@ -35,9 +35,10 @@ class TestCaseGenerator {
    * Generate test cases for all flows
    * @param {Object} session - Session data
    * @param {Object} flowAnalysis - Flow analysis with detected flows
+   * @param {Object} mainWindow - Main window for sending progress updates
    * @returns {Array} Array of test case objects
    */
-  async generateTestCases(session, flowAnalysis) {
+  async generateTestCases(session, flowAnalysis, mainWindow = null) {
     const startTime = Date.now();
     console.log('[TestCaseGenerator] ========================================');
     console.log('[TestCaseGenerator] Generating test cases...');
@@ -47,9 +48,28 @@ class TestCaseGenerator {
       const allTestCases = [];
       let testIdCounter = 1;
 
+      // Send initial progress
+      if (mainWindow) {
+        mainWindow.webContents.send('generation-progress', {
+          total: flowAnalysis.flows.length,
+          completed: 0,
+          current: 'Starting generation...'
+        });
+      }
+
       // Generate test cases for each flow
-      for (const flow of flowAnalysis.flows) {
-        console.log(`[TestCaseGenerator] Processing flow: ${flow.name} (${flow.type})`);
+      for (let i = 0; i < flowAnalysis.flows.length; i++) {
+        const flow = flowAnalysis.flows[i];
+        console.log(`[TestCaseGenerator] Processing flow ${i + 1}/${flowAnalysis.flows.length}: ${flow.name} (${flow.type})`);
+
+        // Send progress update
+        if (mainWindow) {
+          mainWindow.webContents.send('generation-progress', {
+            total: flowAnalysis.flows.length,
+            completed: i,
+            current: `Generating ${flow.name}...`
+          });
+        }
 
         const flowTestCases = await this.generateTestCasesForFlow(
           session,
@@ -61,6 +81,20 @@ class TestCaseGenerator {
         testIdCounter += flowTestCases.length;
 
         console.log(`[TestCaseGenerator]   Generated ${flowTestCases.length} test cases`);
+
+        // Send completion for this flow with 1 second delay for smooth UI
+        if (mainWindow) {
+          mainWindow.webContents.send('generation-progress', {
+            total: flowAnalysis.flows.length,
+            completed: i + 1,
+            current: `Generated ${flowTestCases.length} tests for ${flow.name}`
+          });
+
+          // 1 second delay for smooth UI updates (except for last flow)
+          if (i < flowAnalysis.flows.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
       }
 
       const duration = Date.now() - startTime;

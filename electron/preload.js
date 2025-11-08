@@ -38,4 +38,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Test Progress
   onTestProgress: (callback) => ipcRenderer.on('test-progress', (event, data) => callback(data)),
+
+  // Test Generation Progress
+  onGenerationProgress: (callback) => ipcRenderer.on('generation-progress', (event, data) => callback(data)),
 });

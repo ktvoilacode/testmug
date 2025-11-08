@@ -325,7 +325,7 @@ ipcMain.handle('stop-recording', async () => {
 
             // Generate test cases with AI
             console.log('[Recording] Generating test cases with AI...');
-            const testCases = await testCaseGenerator.generateTestCases(session, analysis);
+            const testCases = await testCaseGenerator.generateTestCases(session, analysis, mainWindow);
 
             if (testCases.length > 0) {
               // Generate Excel file
@@ -572,7 +572,7 @@ ipcMain.handle('regenerate-test-cases', async (event, sessionId) => {
 
     // Generate new test cases
     console.log('[IPC] Generating new test cases...');
-    const testCases = await testCaseGenerator.generateTestCases(session, flowAnalysis);
+    const testCases = await testCaseGenerator.generateTestCases(session, flowAnalysis, mainWindow);
 
     if (testCases.length === 0) {
       return { success: false, message: 'No test cases generated' };
