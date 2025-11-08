@@ -81,6 +81,16 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
+  // Scroll to bottom when switching to chat view
+  useEffect(() => {
+    if (rightPanelView === 'chat') {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        scrollToBottom();
+      }, 50);
+    }
+  }, [rightPanelView]);
+
   // Auto-resize textarea as user types
   useEffect(() => {
     if (textareaRef.current) {

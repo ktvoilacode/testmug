@@ -280,8 +280,23 @@ class TestRunner {
       await page.screenshot({ path: screenshotPath, fullPage: false });
 
       const duration = (Date.now() - startTime) / 1000;
-      // Consider test passed if most actions succeeded
-      const status = result.errorCount === 0 || result.successCount > result.errorCount ? 'Pass' : 'Fail';
+
+      // Stricter pass criteria:
+      // For positive tests: ALL actions must succeed
+      // For negative tests: Some actions should fail (expecting errors)
+      let status;
+      if (testCase.type === 'positive') {
+        // Positive tests must have all actions succeed
+        status = result.errorCount === 0 ? 'Pass' : 'Fail';
+      } else if (testCase.type === 'negative') {
+        // Negative tests should have some failures (they're testing error cases)
+        // Pass if errors occurred (expected behavior)
+        status = result.errorCount > 0 ? 'Pass' : 'Fail';
+      } else {
+        // Default: require at least 80% success rate
+        const successRate = result.successCount / result.totalActions;
+        status = successRate >= 0.8 ? 'Pass' : 'Fail';
+      }
 
       console.log(`[TestRunner]   ${status}: ${testCase.id} (${duration.toFixed(2)}s) - ${result.successCount}/${result.totalActions} actions`);
 
@@ -327,17 +342,31 @@ class TestRunner {
     const modifiedActions = JSON.parse(JSON.stringify(actions));
 
     // Apply test data to input actions
+    // IMPORTANT: Find the LAST input action for each field (final typed value)
     testData.forEach(data => {
-      const inputAction = modifiedActions.find(
-        action => action.type === 'input' && action.selector === data.field
-      );
+      // Find indices of ALL input actions for this field
+      const inputIndices = [];
+      modifiedActions.forEach((action, index) => {
+        if (action.type === 'input' && action.selector === data.field) {
+          inputIndices.push(index);
+        }
+      });
 
-      if (inputAction) {
-        inputAction.value = data.value;
+      if (inputIndices.length > 0) {
+        // Replace the value in the LAST input action (final value)
+        const lastIndex = inputIndices[inputIndices.length - 1];
+        modifiedActions[lastIndex].value = data.value;
+
+        // Mark previous input actions for this field for removal
+        // (to avoid typing intermediate values like 's', 'st', 'stu', etc.)
+        for (let i = 0; i < inputIndices.length - 1; i++) {
+          modifiedActions[inputIndices[i]]._remove = true;
+        }
       }
     });
 
-    return modifiedActions;
+    // Remove marked actions
+    return modifiedActions.filter(action => !action._remove);
   }
 }
 

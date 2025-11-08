@@ -121,16 +121,32 @@ class TestCaseGenerator {
         messages: [
           {
             role: 'system',
-            content: `You are a QA test automation expert. Generate comprehensive test cases for the given flow.
+            content: `You are a QA test automation expert. Generate test cases for the given flow.
 
-Requirements:
-- Generate 8-12 test cases per flow
-- Include positive, negative, and edge cases
-- Provide test data variations
-- Include expected results
-- Prioritize test cases (High/Medium/Low)
+⚠️ CRITICAL: READ THE FLOW TYPE CAREFULLY ⚠️
 
-Return ONLY valid JSON in this format:
+IF flow type is "positive":
+  - Generate ONLY tests that use VALID data
+  - ALL test cases should be designed to PASS/SUCCEED
+  - Use valid usernames, valid passwords, valid emails
+  - Do NOT include empty fields, invalid data, or error scenarios
+  - Example: "student" / "Password123" should succeed
+
+IF flow type is "negative":
+  - Generate ONLY tests that use INVALID data
+  - ALL test cases should be designed to FAIL/show errors
+  - Use invalid usernames, wrong passwords, empty fields
+  - Include SQL injection, XSS, special characters
+  - Example: "baduser" / "wrong" should fail with error
+
+RULES:
+1. Generate 8-12 test cases per flow
+2. Match field selectors EXACTLY from recorded actions
+3. For "positive" flows → ALL tests use VALID data → ALL should PASS
+4. For "negative" flows → ALL tests use INVALID data → ALL should FAIL
+5. Do NOT mix positive and negative test cases in the same flow
+
+Return ONLY valid JSON (no markdown, no explanations):
 {
   "testCases": [
     {
@@ -138,14 +154,16 @@ Return ONLY valid JSON in this format:
       "description": "What this test verifies",
       "priority": "High|Medium|Low",
       "testData": [
-        {"field": "username", "value": "testuser", "expected": "Login success"}
+        {
+          "field": "exact_selector",
+          "value": "test_value",
+          "expected": "expected_outcome"
+        }
       ],
-      "expectedResult": "Expected outcome"
+      "expectedResult": "Overall expected result"
     }
   ]
-}
-
-No markdown, no explanation, ONLY JSON.`
+}`
           },
           {
             role: 'user',
@@ -204,26 +222,54 @@ No markdown, no explanation, ONLY JSON.`
       ? flow.assertions.map(a => `- ${a.description}: ${a.selector}`).join('\n')
       : 'None';
 
+    // Extract input fields with their recorded values as examples
+    const inputFields = flowActions
+      .filter(a => a.type === 'input')
+      .map(a => `  - Field: "${a.selector}" | Example value: "${a.value}" | Type: ${a.inputType || 'text'}`)
+      .join('\n');
+
     return `Generate test cases for this ${flow.type} flow:
 
-FLOW NAME: ${flow.name}
-FLOW TYPE: ${flow.type}
-DESCRIPTION: ${flow.description}
+FLOW INFORMATION:
+- Name: ${flow.name}
+- Type: ${flow.type} (${flow.type === 'positive' ? 'Tests should PASS with valid data' : 'Tests should FAIL with invalid data'})
+- Description: ${flow.description}
+- Start URL: ${session.startUrl}
 
-START URL: ${session.startUrl}
-
-ACTIONS PERFORMED:
+RECORDED ACTIONS (use these EXACT selectors):
 ${actionSummary}
 
-ASSERTIONS:
+INPUT FIELDS DETECTED:
+${inputFields || '  No input fields'}
+
+ASSERTIONS TO VERIFY:
 ${assertionsSummary}
 
-Generate 8-12 diverse test cases covering:
+GENERATE 8-12 TEST CASES WITH:
 ${flow.type === 'positive'
-  ? '- Happy path variations\n- Different valid data combinations\n- Boundary conditions\n- Edge cases with valid data'
-  : '- Invalid input combinations\n- Missing required fields\n- Format errors\n- Boundary violations\n- Security tests (XSS, SQL injection patterns)'}
+  ? `POSITIVE TEST SCENARIOS (should all PASS):
+  1. Happy path with valid data (use example values as reference)
+  2. Alternate valid data combinations
+  3. Boundary values (min/max lengths, valid edge cases)
+  4. Different valid formats (if applicable)
+  5. Valid special characters in appropriate fields
 
-Each test case should have realistic test data based on the recorded actions.`;
+  NOTE: All these tests should succeed when executed!`
+  : `NEGATIVE TEST SCENARIOS (should all FAIL/show errors):
+  1. Empty required fields (one at a time)
+  2. Invalid formats (wrong email, weak password, etc.)
+  3. Boundary violations (too long, too short)
+  4. Invalid characters and special symbols
+  5. SQL injection attempts (if applicable)
+  6. XSS attempts (if applicable)
+
+  NOTE: All these tests should fail or show error messages when executed!`}
+
+CRITICAL:
+- Use the EXACT field selectors shown above (e.g., "${flowActions.find(a => a.type === 'input')?.selector || '#fieldName'}")
+- Make test data realistic and appropriate for each field type
+- For ${flow.type} flows, all tests should ${flow.type === 'positive' ? 'PASS' : 'FAIL'}
+- Reference the example values to understand expected data format`;
   }
 
   /**
