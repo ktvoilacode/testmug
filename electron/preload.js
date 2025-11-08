@@ -35,7 +35,12 @@ contextBridge.exposeInMainWorld('electron', {
   runAllTests: (sessionId) => ipcRenderer.invoke('run-all-tests', sessionId),
 
   // Assertions
-  onAssertionAdded: (callback) => ipcRenderer.on('assertion-added', (event, data) => callback(data)),
+  onAssertionAdded: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('assertion-added', handler);
+    // Return cleanup function
+    return () => ipcRenderer.removeListener('assertion-added', handler);
+  },
 
   // Test Progress
   onTestProgress: (callback) => ipcRenderer.on('test-progress', (event, data) => callback(data)),

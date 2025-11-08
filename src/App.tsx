@@ -4,7 +4,7 @@ import {
   MdRefresh, MdClose, MdHistory, MdDelete, MdPlayArrow,
   MdTableChart, MdLink, MdCalendarToday, MdCode, MdTimer, MdCheckCircle,
   MdLoop, MdFiberManualRecord, MdCheckCircleOutline, MdWarning,
-  MdSmartToy, MdAssessment, MdStars, MdCelebration
+  MdSmartToy, MdAssessment, MdStars, MdCelebration, MdError, MdDone
 } from 'react-icons/md';
 import './App.css';
 
@@ -54,8 +54,10 @@ function App() {
   const [runningTestSessionId, setRunningTestSessionId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<{total: number, completed: number, current: string} | null>(null);
   const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(null);
+  const [completedTestSessions, setCompletedTestSessions] = useState<{[key: string]: {passed: number, failed: number, total: number, reportPath?: string}}>({});
   const [urlHistory, setUrlHistory] = useState<string[]>([]);
   const [urlSuggestion, setUrlSuggestion] = useState('');
+  const [lastAssertionDesc, setLastAssertionDesc] = useState<string>('');
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -77,11 +79,16 @@ function App() {
   };
 
   const scrollToBottom = () => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Use setTimeout to ensure DOM is fully updated before scrolling
+    setTimeout(() => {
+      scrollToBottom();
+    }, 10);
   }, [messages]);
 
   // Scroll to bottom when switching to chat view
@@ -355,7 +362,12 @@ function App() {
       } else {
         setMessages(prev => [...prev, {
           role: 'system',
-          content: `❌ Recording stopped but ${result.message || 'no actions captured'}`
+          content: (
+            <span className="message-with-icon">
+              <MdError size={16} className="msg-icon warning" />
+              Recording stopped but {result.message || 'no actions captured'}
+            </span>
+          )
         }]);
       }
     } catch (error) {
@@ -421,6 +433,18 @@ function App() {
     }]);
 
     if (result.success) {
+      // Refresh session data in the messages to update the mini card
+      const updatedSessions = await window.electron.getSessions();
+      if (updatedSessions.success) {
+        const updatedSession = updatedSessions.sessions.find((s: any) => s.id === session.id);
+        if (updatedSession) {
+          setMessages(prev => prev.map(msg =>
+            msg.role === 'session-card' && (msg as any).sessionData?.id === session.id
+              ? { ...msg, sessionData: updatedSession }
+              : msg
+          ));
+        }
+      }
       loadSessions(); // Refresh to show new test cases
     }
   };
@@ -442,7 +466,12 @@ function App() {
         await loadSessions();
         setMessages(prev => [...prev, {
           role: 'system',
-          content: `✅ Session renamed to: ${editingSessionName.trim()}`
+          content: (
+            <span className="message-with-icon">
+              <MdDone size={16} className="msg-icon success" />
+              Session renamed to: {editingSessionName.trim()}
+            </span>
+          )
         }]);
       }
     } catch (error) {
@@ -459,7 +488,12 @@ function App() {
           await loadSessions();
           setMessages(prev => [...prev, {
             role: 'system',
-            content: `🗑️ Session deleted: ${sessionName}`
+            content: (
+              <span className="message-with-icon">
+                <MdDelete size={16} className="msg-icon warning" />
+                Session deleted: {sessionName}
+              </span>
+            )
           }]);
         }
       } catch (error) {
@@ -491,42 +525,37 @@ function App() {
   // Listen for assertion additions
   useEffect(() => {
     const handleAssertionAdded = (assertion: any) => {
-      setMessages(prev => {
-        // Prevent duplicate messages
-        const lastMessage = prev[prev.length - 1];
-        if (lastMessage && lastMessage.content === `✨ Assertion added: ${assertion.description}`) {
-          return prev;
-        }
-        return [...prev, {
-          role: 'system',
-          content: (
-            <span className="message-with-icon">
-              <MdStars size={16} className="msg-icon assertion" />
-              Assertion added: {assertion.description}
-            </span>
-          )
-        }];
-      });
+      // Prevent duplicate assertions by tracking the last one
+      if (assertion.description === lastAssertionDesc) {
+        return;
+      }
+
+      setLastAssertionDesc(assertion.description);
+
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: (
+          <span className="message-with-icon">
+            <MdStars size={16} className="msg-icon assertion" />
+            Assertion added: {assertion.description}
+          </span>
+        )
+      }]);
     };
 
-    window.electron.onAssertionAdded(handleAssertionAdded);
+    const cleanup = window.electron.onAssertionAdded(handleAssertionAdded);
 
-    // Cleanup function to prevent duplicate listeners
+    // Cleanup function to remove listener
     return () => {
-      // Note: electron IPC doesn't have removeListener, but preventing duplicates above
+      if (cleanup) cleanup();
     };
-  }, []);
+  }, [lastAssertionDesc]);
 
   // Listen for test execution progress
   useEffect(() => {
     const handleTestProgress = (progress: {total: number, completed: number, passed: number, failed: number}) => {
       setTestProgress(progress);
-
-      // Add progress message to chat
-      setMessages(prev => [...prev, {
-        role: 'system',
-        content: `⏳ Test Progress: ${progress.completed}/${progress.total} (✅ ${progress.passed} passed, ❌ ${progress.failed} failed)`
-      }]);
+      // Progress is now shown in the mini card progress bar, no need for chat messages
     };
 
     window.electron.onTestProgress(handleTestProgress);
@@ -668,7 +697,16 @@ function App() {
                             <span className="mini-card-title">
                               {(msg as any).sessionData.customName || ((msg as any).sessionData.startUrl.includes('login') ? '🔐 Login Test' : '🧪 Test Session')}
                             </span>
-                            <span className="mini-card-id">#{(msg as any).sessionData.id.substring(8, 16)}</span>
+                            <div className="mini-card-header-right">
+                              <span className="mini-card-id">#{111 + index}</span>
+                              <button
+                                className="mini-btn-icon details"
+                                onClick={() => setRightPanelView('history')}
+                                title="View in history"
+                              >
+                                <MdHistory size={14} />
+                              </button>
+                            </div>
                           </div>
                           <div className="mini-card-stats">
                             <span className="mini-stat"><MdCode size={12} /> {(msg as any).sessionData.actionCount} actions</span>
@@ -677,39 +715,195 @@ function App() {
                               <span className="mini-stat"><MdLoop size={12} /> {(msg as any).sessionData.flowAnalysis.flowCount} flows</span>
                             )}
                           </div>
-                          <div className="mini-card-actions">
-                            <button
-                              className="mini-btn replay"
-                              onClick={async () => {
-                                setMessages(prev => [...prev, {
-                                  role: 'system',
-                                  content: `▶️ Replaying session...`
-                                }]);
-                                const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
-                                setMessages(prev => [...prev, {
-                                  role: 'system',
-                                  content: result.success ? `✅ Replay completed!` : `❌ Replay failed: ${result.message}`
-                                }]);
-                              }}
-                              title="Replay session"
-                            >
-                              <MdPlayArrow size={14} /> Replay
-                            </button>
-                            <button
-                              className="mini-btn generate"
-                              onClick={() => handleGenerateTestCases((msg as any).sessionData)}
-                              title="Generate test cases"
-                            >
-                              <MdTableChart size={14} /> Generate Tests
-                            </button>
-                            <button
-                              className="mini-btn details"
-                              onClick={() => setRightPanelView('history')}
-                              title="View in history"
-                            >
-                              <MdHistory size={14} /> Details
-                            </button>
-                          </div>
+                          {!(msg as any).sessionData.testCaseMetadata?.testCaseCount ? (
+                            <div className="mini-card-actions">
+                              <button
+                                className="mini-btn replay"
+                                onClick={async () => {
+                                  setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: (
+                                      <span className="message-with-icon">
+                                        <MdPlayArrow size={16} className="msg-icon info" />
+                                        Replaying session...
+                                      </span>
+                                    )
+                                  }]);
+                                  const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
+                                  setMessages(prev => [...prev, {
+                                    role: 'system',
+                                    content: result.success ? (
+                                      <span className="message-with-icon">
+                                        <MdDone size={16} className="msg-icon success" />
+                                        Replay completed!
+                                      </span>
+                                    ) : (
+                                      <span className="message-with-icon">
+                                        <MdError size={16} className="msg-icon warning" />
+                                        Replay failed: {result.message}
+                                      </span>
+                                    )
+                                  }]);
+                                }}
+                                title="Replay session"
+                              >
+                                <MdPlayArrow size={14} /> Replay
+                              </button>
+                              <button
+                                className="mini-btn generate"
+                                onClick={() => handleGenerateTestCases((msg as any).sessionData)}
+                                title="Generate test cases"
+                              >
+                                <MdTableChart size={14} /> Generate Tests
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              {/* Simple Test Progress Status */}
+                              {runningTestSessionId === (msg as any).sessionData.id && testProgress && (
+                                <div className="mini-status-bar">
+                                  <span className="status-text">
+                                    Running tests... {testProgress.completed}/{testProgress.total}
+                                  </span>
+                                  <div className="status-progress">
+                                    <div
+                                      className="status-progress-fill"
+                                      style={{ width: `${(testProgress.completed / testProgress.total) * 100}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Test Completion Report Link */}
+                              {completedTestSessions[(msg as any).sessionData.id] && (
+                                <div className="mini-test-result">
+                                  <span className="result-summary">
+                                    ✅ {completedTestSessions[(msg as any).sessionData.id].passed} passed,
+                                    ❌ {completedTestSessions[(msg as any).sessionData.id].failed} failed
+                                  </span>
+                                  {completedTestSessions[(msg as any).sessionData.id].reportPath && (
+                                    <button
+                                      className="mini-link-btn"
+                                      onClick={async () => {
+                                        const reportPath = completedTestSessions[(msg as any).sessionData.id].reportPath;
+                                        if (reportPath) {
+                                          await window.electron.openTestCases((msg as any).sessionData.id);
+                                        }
+                                      }}
+                                      title="View test report"
+                                    >
+                                      View Report →
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="mini-card-actions-full">
+                                <button
+                                  className="mini-btn open-excel"
+                                  onClick={async () => {
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: (
+                                        <span className="message-with-icon">
+                                          <MdTableChart size={16} className="msg-icon info" />
+                                          Opening test cases Excel file...
+                                        </span>
+                                      )
+                                    }]);
+                                    const result = await window.electron.openTestCases((msg as any).sessionData.id);
+                                    if (!result.success) {
+                                      setMessages(prev => [...prev, {
+                                        role: 'system',
+                                        content: (
+                                          <span className="message-with-icon">
+                                            <MdError size={16} className="msg-icon warning" />
+                                            Failed to open Excel: {result.message}
+                                          </span>
+                                        )
+                                      }]);
+                                    }
+                                  }}
+                                  title="Open Excel file"
+                                >
+                                  <MdTableChart size={14} /> Open Excel
+                                </button>
+                                <button
+                                  className="mini-btn replay"
+                                  onClick={async () => {
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: (
+                                        <span className="message-with-icon">
+                                          <MdPlayArrow size={16} className="msg-icon info" />
+                                          Replaying session...
+                                        </span>
+                                      )
+                                    }]);
+                                    const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: result.success ? (
+                                        <span className="message-with-icon">
+                                          <MdDone size={16} className="msg-icon success" />
+                                          Replay completed!
+                                        </span>
+                                      ) : (
+                                        <span className="message-with-icon">
+                                          <MdError size={16} className="msg-icon warning" />
+                                          Replay failed: {result.message}
+                                        </span>
+                                      )
+                                    }]);
+                                  }}
+                                  title="Replay session"
+                                >
+                                  <MdPlayArrow size={14} /> Replay
+                                </button>
+                                <button
+                                  className="mini-btn regenerate"
+                                  onClick={() => handleGenerateTestCases((msg as any).sessionData)}
+                                  title="Regenerate test cases"
+                                >
+                                  <MdRefresh size={14} /> Regenerate
+                                </button>
+                                <button
+                                  className="mini-btn run-tests"
+                                  onClick={async () => {
+                                    const sessionId = (msg as any).sessionData.id;
+                                    setRunningTestSessionId(sessionId);
+                                    setTestProgress({
+                                      total: (msg as any).sessionData.testCaseMetadata.testCaseCount,
+                                      completed: 0,
+                                      passed: 0,
+                                      failed: 0
+                                    });
+
+                                    const result = await window.electron.runAllTests(sessionId);
+
+                                    setTestProgress(null);
+                                    setRunningTestSessionId(null);
+
+                                    // Save completion data
+                                    if (result.success) {
+                                      setCompletedTestSessions(prev => ({
+                                        ...prev,
+                                        [sessionId]: {
+                                          passed: result.passed,
+                                          failed: result.failed,
+                                          total: result.total,
+                                          reportPath: result.reportPath
+                                        }
+                                      }));
+                                    }
+                                  }}
+                                  title="Run all test cases"
+                                >
+                                  <MdPlayArrow size={14} /> Run Tests
+                                </button>
+                              </div>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <div className="message-content">{msg.content}</div>
@@ -938,12 +1132,27 @@ function App() {
                                   onClick={async () => {
                                     setMessages(prev => [...prev, {
                                       role: 'system',
-                                      content: `▶️ Replaying full session...`
+                                      content: (
+                                        <span className="message-with-icon">
+                                          <MdPlayArrow size={16} className="msg-icon info" />
+                                          Replaying full session...
+                                        </span>
+                                      )
                                     }]);
                                     const result = await window.electron.replaySession(session.id, 'normal');
                                     setMessages(prev => [...prev, {
                                       role: 'system',
-                                      content: result.success ? `✅ Replay completed!` : `❌ Replay failed: ${result.message}`
+                                      content: result.success ? (
+                                        <span className="message-with-icon">
+                                          <MdDone size={16} className="msg-icon success" />
+                                          Replay completed!
+                                        </span>
+                                      ) : (
+                                        <span className="message-with-icon">
+                                          <MdError size={16} className="msg-icon warning" />
+                                          Replay failed: {result.message}
+                                        </span>
+                                      )
                                     }]);
                                   }}
                                   title="Replay entire session"
@@ -957,12 +1166,27 @@ function App() {
                                     onClick={async () => {
                                       setMessages(prev => [...prev, {
                                         role: 'system',
-                                        content: `▶️ Replaying ${flow.name}...`
+                                        content: (
+                                          <span className="message-with-icon">
+                                            <MdPlayArrow size={16} className="msg-icon info" />
+                                            Replaying {flow.name}...
+                                          </span>
+                                        )
                                       }]);
                                       const result = await window.electron.replayFlow(session.id, flow.flowId);
                                       setMessages(prev => [...prev, {
                                         role: 'system',
-                                        content: result.success ? `✅ ${flow.name} completed!` : `❌ Replay failed: ${result.message}`
+                                        content: result.success ? (
+                                          <span className="message-with-icon">
+                                            <MdDone size={16} className="msg-icon success" />
+                                            {flow.name} completed!
+                                          </span>
+                                        ) : (
+                                          <span className="message-with-icon">
+                                            <MdError size={16} className="msg-icon warning" />
+                                            Replay failed: {result.message}
+                                          </span>
+                                        )
                                       }]);
                                     }}
                                     title={`Replay ${flow.name} (${flow.type})`}
@@ -993,13 +1217,23 @@ function App() {
                                   onClick={async () => {
                                     setMessages(prev => [...prev, {
                                       role: 'system',
-                                      content: `📊 Opening test cases Excel file...`
+                                      content: (
+                                        <span className="message-with-icon">
+                                          <MdTableChart size={16} className="msg-icon info" />
+                                          Opening test cases Excel file...
+                                        </span>
+                                      )
                                     }]);
                                     const result = await window.electron.openTestCases(session.id);
                                     if (!result.success) {
                                       setMessages(prev => [...prev, {
                                         role: 'system',
-                                        content: `❌ Failed to open Excel: ${result.message}`
+                                        content: (
+                                          <span className="message-with-icon">
+                                            <MdError size={16} className="msg-icon warning" />
+                                            Failed to open Excel: {result.message}
+                                          </span>
+                                        )
                                       }]);
                                     }
                                   }}
@@ -1020,7 +1254,12 @@ function App() {
 
                                     setMessages(prev => [...prev, {
                                       role: 'system',
-                                      content: `🔄 Regenerating test cases with AI...`
+                                      content: (
+                                        <span className="message-with-icon">
+                                          <MdRefresh size={16} className="msg-icon info" />
+                                          Regenerating test cases with AI...
+                                        </span>
+                                      )
                                     }]);
 
                                     const result = await window.electron.regenerateTestCases(session.id);
@@ -1031,8 +1270,18 @@ function App() {
                                     setMessages(prev => [...prev, {
                                       role: 'system',
                                       content: result.success
-                                        ? `✅ Generated ${result.testCaseCount} new test cases!`
-                                        : `❌ Regeneration failed: ${result.message}`
+                                        ? (
+                                            <span className="message-with-icon">
+                                              <MdDone size={16} className="msg-icon success" />
+                                              Generated {result.testCaseCount} new test cases!
+                                            </span>
+                                          )
+                                        : (
+                                            <span className="message-with-icon">
+                                              <MdError size={16} className="msg-icon warning" />
+                                              Regeneration failed: {result.message}
+                                            </span>
+                                          )
                                     }]);
                                     if (result.success) {
                                       loadSessions(); // Refresh to show updated count
@@ -1066,8 +1315,18 @@ function App() {
                                     setMessages(prev => [...prev, {
                                       role: 'system',
                                       content: result.success
-                                        ? `✅ Tests completed: ${result.passed}/${result.total} passed (${result.failed} failed)`
-                                        : `❌ Test execution failed: ${result.message}`
+                                        ? (
+                                            <span className="message-with-icon">
+                                              <MdDone size={16} className="msg-icon success" />
+                                              Tests completed: {result.passed}/{result.total} passed ({result.failed} failed)
+                                            </span>
+                                          )
+                                        : (
+                                            <span className="message-with-icon">
+                                              <MdError size={16} className="msg-icon warning" />
+                                              Test execution failed: {result.message}
+                                            </span>
+                                          )
                                     }]);
                                   }}
                                   title="Run all test cases in parallel"

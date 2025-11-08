@@ -296,7 +296,7 @@ body {
   width: 30%;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: #ececed;
   border-left: 1px solid #e5e5e5;
   overflow: hidden;
   position: relative;
@@ -306,15 +306,15 @@ body {
 .panel-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid #e5e5e5;
-  background: #ffffff;
+  border-bottom: 1px solid #d1d5db;
+  background: #ececed;
   padding: 0;
 }
 
 .panel-tab {
   flex: 1;
   padding: 12px 16px;
-  background: #ffffff;
+  background: #e0e0e1;
   color: #6b7280;
   border: none;
   border-bottom: 2px solid transparent;
@@ -325,14 +325,14 @@ body {
 }
 
 .panel-tab:hover {
-  background: #f7f7f8;
+  background: #ececed;
   color: #2e2e2e;
 }
 
 .panel-tab.active {
   color: #2e2e2e;
   border-bottom-color: #2e2e2e;
-  background: #ffffff;
+  background: #ececed;
 }
 
 /* Chat Container */
@@ -343,7 +343,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: #f7f7f8;
+  background: #ececed;
+  align-items: flex-start;
 }
 
 .chat-container::-webkit-scrollbar {
@@ -436,26 +437,46 @@ body {
 }
 
 .message.session-card {
-  max-width: 100%;
+  max-width: 95%;
+  width: 95%;
   padding: 0;
   background: transparent;
+  align-self: flex-start;
+  margin: 8px 0;
+  flex-shrink: 0;
+  flex-grow: 0;
+  height: auto;
 }
 
 /* Mini Session Card in Chat */
 .mini-session-card {
   background: #ffffff;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #d1d5db;
   border-radius: 8px;
   padding: 12px;
   width: 100%;
   min-width: 280px;
+  max-width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+  min-height: 130px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .mini-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+
+.mini-card-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .mini-card-title {
@@ -470,13 +491,36 @@ body {
   background: #f3f4f6;
   padding: 2px 6px;
   border-radius: 4px;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.mini-btn-icon {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s;
+}
+
+.mini-btn-icon:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #2e2e2e;
 }
 
 .mini-card-stats {
   display: flex;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .mini-stat {
@@ -489,8 +533,9 @@ body {
 
 .mini-card-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .mini-btn {
@@ -533,8 +578,118 @@ body {
   background: #ecfdf5;
 }
 
+.mini-btn.open-excel {
+  color: #3b82f6;
+  border-color: #bfdbfe;
+}
+
+.mini-btn.open-excel:hover {
+  background: #eff6ff;
+}
+
+.mini-btn.regenerate {
+  color: #f59e0b;
+  border-color: #fcd34d;
+}
+
+.mini-btn.regenerate:hover {
+  background: #fef3c7;
+}
+
+.mini-btn.run-tests {
+  color: #8b5cf6;
+  border-color: #c4b5fd;
+}
+
+.mini-btn.run-tests:hover {
+  background: #f5f3ff;
+}
+
 .mini-btn.details {
   color: #6b7280;
+}
+
+.mini-card-actions-full {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mini-card-actions-full .open-excel {
+  grid-column: 1 / -1;
+}
+
+.mini-card-actions-full .run-tests {
+  grid-column: 1 / -1;
+}
+
+/* Simple status bar in mini card */
+.mini-status-bar {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+}
+
+.mini-status-bar .status-text {
+  display: block;
+  font-size: 12px;
+  color: #1e40af;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.mini-status-bar .status-progress {
+  height: 4px;
+  background: #dbeafe;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.mini-status-bar .status-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%);
+  transition: width 0.3s ease;
+}
+
+/* Test completion result */
+.mini-test-result {
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-test-result .result-summary {
+  font-size: 12px;
+  color: #166534;
+  font-weight: 500;
+}
+
+.mini-link-btn {
+  padding: 4px 10px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.mini-link-btn:hover {
+  background: #059669;
+  transform: translateY(-1px);
 }
 
 /* Chat Input */
@@ -1481,14 +1636,14 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #ffffff;
+  background: #ececed;
 }
 
 .panel-body {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  background: #f7f7f8;
+  background: #ececed;
 }
 
 .panel-body::-webkit-scrollbar {
