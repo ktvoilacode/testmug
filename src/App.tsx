@@ -54,6 +54,17 @@ function App() {
   const [runningTestSessionId, setRunningTestSessionId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<{total: number, completed: number, current: string} | null>(null);
   const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(null);
+  const [showContextModal, setShowContextModal] = useState(false);
+  const [contextModalSession, setContextModalSession] = useState<any | null>(null);
+  const [contextForm, setContextForm] = useState({
+    validUsername: '',
+    validPassword: '',
+    validEmail: '',
+    invalidUsername: '',
+    invalidPassword: '',
+    invalidEmail: '',
+    additionalContext: ''
+  });
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -261,6 +272,72 @@ function App() {
       }
     } catch (error) {
       console.error('Error loading sessions:', error);
+    }
+  };
+
+  const handleOpenContextModal = (session: any) => {
+    setContextModalSession(session);
+
+    // Pre-fill form with detected field values and saved context
+    const formMetadata = session.formMetadata;
+    const savedContext = session.testContext;
+
+    const newForm = {
+      validUsername: savedContext?.validData?.username || formMetadata?.detectedFields?.find((f: any) => f.selector.includes('user'))?.recordedValue || '',
+      validPassword: savedContext?.validData?.password || formMetadata?.detectedFields?.find((f: any) => f.selector.includes('pass'))?.recordedValue || '',
+      validEmail: savedContext?.validData?.email || formMetadata?.detectedFields?.find((f: any) => f.selector.includes('email'))?.recordedValue || '',
+      invalidUsername: savedContext?.invalidData?.username || '',
+      invalidPassword: savedContext?.invalidData?.password || '',
+      invalidEmail: savedContext?.invalidData?.email || '',
+      additionalContext: savedContext?.additionalContext || ''
+    };
+
+    setContextForm(newForm);
+    setShowContextModal(true);
+  };
+
+  const handleCloseContextModal = () => {
+    setShowContextModal(false);
+    setContextModalSession(null);
+  };
+
+  const handleGenerateWithContext = async () => {
+    if (!contextModalSession) return;
+
+    // Close modal
+    setShowContextModal(false);
+
+    // Start generation with progress
+    setGeneratingSessionId(contextModalSession.id);
+    setGenerationProgress({
+      total: contextModalSession.flowAnalysis?.flowCount || 1,
+      completed: 0,
+      current: 'Starting generation...'
+    });
+
+    setMessages(prev => [...prev, {
+      role: 'system',
+      content: `🎯 Generating test cases with your context...`
+    }]);
+
+    // TODO: Call IPC handler with context
+    const result = await window.electron.generateTestCasesWithContext(
+      contextModalSession.id,
+      contextForm
+    );
+
+    setGenerationProgress(null);
+    setGeneratingSessionId(null);
+
+    setMessages(prev => [...prev, {
+      role: 'system',
+      content: result.success
+        ? `✅ Generated ${result.testCaseCount} test cases!`
+        : `❌ Generation failed: ${result.message}`
+    }]);
+
+    if (result.success) {
+      loadSessions(); // Refresh to show new test cases
     }
   };
 
@@ -800,96 +877,108 @@ function App() {
                           </div>
 
                           {/* Card Footer - Test Actions */}
-                          {session.testCaseMetadata && session.testCaseMetadata.testCaseCount > 0 && (
-                            <div className="card-footer">
+                          <div className="card-footer">
+                            {!session.testCaseMetadata || !session.testCaseMetadata.testCaseCount ? (
+                              // No test cases yet - show Generate button
                               <button
-                                className="action-btn primary"
-                                onClick={async () => {
-                                  setMessages(prev => [...prev, {
-                                    role: 'system',
-                                    content: `📊 Opening test cases Excel file...`
-                                  }]);
-                                  const result = await window.electron.openTestCases(session.id);
-                                  if (!result.success) {
+                                className="action-btn generate-primary"
+                                onClick={() => handleOpenContextModal(session)}
+                                title="Generate test cases with AI"
+                              >
+                                <MdTableChart size={16} /> Generate Test Cases
+                              </button>
+                            ) : (
+                              // Test cases exist - show View, Regenerate, Run buttons
+                              <>
+                                <button
+                                  className="action-btn primary"
+                                  onClick={async () => {
                                     setMessages(prev => [...prev, {
                                       role: 'system',
-                                      content: `❌ Failed to open Excel: ${result.message}`
+                                      content: `📊 Opening test cases Excel file...`
                                     }]);
-                                  }
-                                }}
-                                title="View test cases in Excel"
-                              >
-                                <MdTableChart size={16} /> View Test Cases
-                              </button>
-                              <button
-                                className="action-btn secondary"
-                                onClick={async () => {
-                                  // Immediately show generation progress
-                                  setGeneratingSessionId(session.id);
-                                  setGenerationProgress({
-                                    total: session.flowAnalysis?.flowCount || 1,
-                                    completed: 0,
-                                    current: 'Starting generation...'
-                                  });
+                                    const result = await window.electron.openTestCases(session.id);
+                                    if (!result.success) {
+                                      setMessages(prev => [...prev, {
+                                        role: 'system',
+                                        content: `❌ Failed to open Excel: ${result.message}`
+                                      }]);
+                                    }
+                                  }}
+                                  title="View test cases in Excel"
+                                >
+                                  <MdTableChart size={16} /> View Test Cases
+                                </button>
+                                <button
+                                  className="action-btn secondary"
+                                  onClick={async () => {
+                                    // Immediately show generation progress
+                                    setGeneratingSessionId(session.id);
+                                    setGenerationProgress({
+                                      total: session.flowAnalysis?.flowCount || 1,
+                                      completed: 0,
+                                      current: 'Starting generation...'
+                                    });
 
-                                  setMessages(prev => [...prev, {
-                                    role: 'system',
-                                    content: `🔄 Regenerating test cases with AI...`
-                                  }]);
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: `🔄 Regenerating test cases with AI...`
+                                    }]);
 
-                                  const result = await window.electron.regenerateTestCases(session.id);
+                                    const result = await window.electron.regenerateTestCases(session.id);
 
-                                  setGenerationProgress(null); // Clear progress when complete
-                                  setGeneratingSessionId(null); // Clear generating session
+                                    setGenerationProgress(null); // Clear progress when complete
+                                    setGeneratingSessionId(null); // Clear generating session
 
-                                  setMessages(prev => [...prev, {
-                                    role: 'system',
-                                    content: result.success
-                                      ? `✅ Generated ${result.testCaseCount} new test cases!`
-                                      : `❌ Regeneration failed: ${result.message}`
-                                  }]);
-                                  if (result.success) {
-                                    loadSessions(); // Refresh to show updated count
-                                  }
-                                }}
-                                title="Regenerate test cases using AI"
-                              >
-                                <MdRefresh size={18} />
-                              </button>
-                              <button
-                                className="action-btn success"
-                                onClick={async () => {
-                                  // Immediately show status bar with initial progress
-                                  setRunningTestSessionId(session.id);
-                                  setTestProgress({
-                                    total: session.testCaseMetadata.testCaseCount,
-                                    completed: 0,
-                                    passed: 0,
-                                    failed: 0
-                                  });
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: result.success
+                                        ? `✅ Generated ${result.testCaseCount} new test cases!`
+                                        : `❌ Regeneration failed: ${result.message}`
+                                    }]);
+                                    if (result.success) {
+                                      loadSessions(); // Refresh to show updated count
+                                    }
+                                  }}
+                                  title="Regenerate test cases using AI"
+                                >
+                                  <MdRefresh size={18} />
+                                </button>
+                                <button
+                                  className="action-btn success"
+                                  onClick={async () => {
+                                    // Immediately show status bar with initial progress
+                                    setRunningTestSessionId(session.id);
+                                    setTestProgress({
+                                      total: session.testCaseMetadata.testCaseCount,
+                                      completed: 0,
+                                      passed: 0,
+                                      failed: 0
+                                    });
 
-                                  setMessages(prev => [...prev, {
-                                    role: 'system',
-                                    content: `▶️ Running ${session.testCaseMetadata.testCaseCount} test cases...`
-                                  }]);
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: `▶️ Running ${session.testCaseMetadata.testCaseCount} test cases...`
+                                    }]);
 
-                                  const result = await window.electron.runAllTests(session.id);
+                                    const result = await window.electron.runAllTests(session.id);
 
-                                  setTestProgress(null); // Clear progress when complete
-                                  setRunningTestSessionId(null); // Clear running session
-                                  setMessages(prev => [...prev, {
-                                    role: 'system',
-                                    content: result.success
-                                      ? `✅ Tests completed: ${result.passed}/${result.total} passed (${result.failed} failed)`
-                                      : `❌ Test execution failed: ${result.message}`
-                                  }]);
-                                }}
-                                title="Run all test cases in parallel"
-                              >
-                                <MdPlayArrow size={16} /> Run Tests
-                              </button>
-                            </div>
-                          )}
+                                    setTestProgress(null); // Clear progress when complete
+                                    setRunningTestSessionId(null); // Clear running session
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: result.success
+                                        ? `✅ Tests completed: ${result.passed}/${result.total} passed (${result.failed} failed)`
+                                        : `❌ Test execution failed: ${result.message}`
+                                    }]);
+                                  }}
+                                  title="Run all test cases in parallel"
+                                >
+                                  <MdPlayArrow size={16} /> Run Tests
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -903,6 +992,132 @@ function App() {
         {/* Right Panel - Browser View (handled by Electron BrowserView) */}
         {/* The browser view is rendered natively by Electron, not React */}
       </div>
+
+      {/* Context Modal */}
+      {showContextModal && contextModalSession && (
+        <div className="modal-overlay" onClick={handleCloseContextModal}>
+          <div className="context-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Generate Test Cases</h3>
+              <button className="modal-close" onClick={handleCloseContextModal}>
+                <MdClose size={24} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {/* Detected Fields Section */}
+              {contextModalSession.formMetadata && contextModalSession.formMetadata.detectedFields && contextModalSession.formMetadata.detectedFields.length > 0 && (
+                <div className="modal-section">
+                  <label className="section-label">📝 Detected Fields</label>
+                  <div className="detected-fields">
+                    {contextModalSession.formMetadata.detectedFields.map((field: any, idx: number) => (
+                      <div key={idx} className="field-item">
+                        <span className="field-selector">{field.selector}</span>
+                        <span className="field-type">({field.type})</span>
+                        <span className="field-arrow">→</span>
+                        <span className="field-value">"{field.recordedValue}"</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Valid Test Data Section */}
+              <div className="modal-section">
+                <label className="section-label">✅ Valid Test Data (for PASS tests)</label>
+                <div className="form-row">
+                  <div className="form-field">
+                    <label>Username</label>
+                    <input
+                      type="text"
+                      value={contextForm.validUsername}
+                      onChange={(e) => setContextForm({...contextForm, validUsername: e.target.value})}
+                      placeholder="e.g., student"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>Password</label>
+                    <input
+                      type="text"
+                      value={contextForm.validPassword}
+                      onChange={(e) => setContextForm({...contextForm, validPassword: e.target.value})}
+                      placeholder="e.g., Password123"
+                    />
+                  </div>
+                </div>
+                <div className="form-field">
+                  <label>Email (optional)</label>
+                  <input
+                    type="text"
+                    value={contextForm.validEmail}
+                    onChange={(e) => setContextForm({...contextForm, validEmail: e.target.value})}
+                    placeholder="e.g., user@example.com"
+                  />
+                </div>
+              </div>
+
+              {/* Invalid Test Data Section */}
+              <div className="modal-section">
+                <label className="section-label">❌ Invalid Test Data (for FAIL tests)</label>
+                <div className="form-row">
+                  <div className="form-field">
+                    <label>Invalid Username</label>
+                    <input
+                      type="text"
+                      value={contextForm.invalidUsername}
+                      onChange={(e) => setContextForm({...contextForm, invalidUsername: e.target.value})}
+                      placeholder="e.g., wronguser"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label>Invalid Password</label>
+                    <input
+                      type="text"
+                      value={contextForm.invalidPassword}
+                      onChange={(e) => setContextForm({...contextForm, invalidPassword: e.target.value})}
+                      placeholder="e.g., wrongpass"
+                    />
+                  </div>
+                </div>
+                <div className="form-field">
+                  <label>Invalid Email (optional)</label>
+                  <input
+                    type="text"
+                    value={contextForm.invalidEmail}
+                    onChange={(e) => setContextForm({...contextForm, invalidEmail: e.target.value})}
+                    placeholder="e.g., invalid@"
+                  />
+                </div>
+              </div>
+
+              {/* Additional Context Section */}
+              <div className="modal-section">
+                <label className="section-label">💡 Additional Context (optional)</label>
+                <textarea
+                  className="context-textarea"
+                  value={contextForm.additionalContext}
+                  onChange={(e) => setContextForm({...contextForm, additionalContext: e.target.value})}
+                  placeholder="Describe edge cases, expected errors, validation rules, etc.&#10;Example:&#10;- Empty fields show 'Required' error&#10;- Password <8 chars shows 'Too short'&#10;- Wrong credentials show 'Invalid login'"
+                  rows={5}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="modal-btn cancel" onClick={handleCloseContextModal}>
+                Cancel
+              </button>
+              <button
+                className="modal-btn generate"
+                onClick={handleGenerateWithContext}
+                disabled={!contextForm.validUsername && !contextForm.validPassword}
+              >
+                <MdTableChart size={16} /> Generate Test Cases
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electron', {
   // Test Cases
   openTestCases: (sessionId) => ipcRenderer.invoke('open-test-cases', sessionId),
   regenerateTestCases: (sessionId) => ipcRenderer.invoke('regenerate-test-cases', sessionId),
+  generateTestCasesWithContext: (sessionId, context) => ipcRenderer.invoke('generate-test-cases-with-context', sessionId, context),
   runAllTests: (sessionId) => ipcRenderer.invoke('run-all-tests', sessionId),
 
   // Assertions

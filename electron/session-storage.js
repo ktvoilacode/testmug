@@ -110,7 +110,9 @@ class SessionStorage {
             startUrl: session.startUrl,
             customName: session.customName || null,
             flowAnalysis: analysis, // Include flow analysis
-            testCaseMetadata: session.testCaseMetadata || null // Include test case metadata
+            testCaseMetadata: session.testCaseMetadata || null, // Include test case metadata
+            formMetadata: session.formMetadata || null, // Include form metadata
+            testContext: session.testContext || null // Include test context
           });
         } catch (error) {
           console.error('[SessionStorage] Error loading session:', file, error);
@@ -228,6 +230,43 @@ class SessionStorage {
 
     fs.writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2));
     console.log('[SessionStorage] Saved test case metadata:', sessionId, metadata.testCaseCount, 'tests');
+  }
+
+  /**
+   * Save form metadata to session
+   */
+  saveFormMetadata(sessionId, formMetadata) {
+    const sessionFile = path.join(this.sessionsDir, `${sessionId}.json`);
+
+    if (!fs.existsSync(sessionFile)) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+    sessionData.formMetadata = formMetadata;
+
+    fs.writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2));
+    console.log('[SessionStorage] Saved form metadata:', sessionId, formMetadata.fieldCount, 'fields');
+  }
+
+  /**
+   * Save test context (user-provided context for test generation)
+   */
+  saveTestContext(sessionId, testContext) {
+    const sessionFile = path.join(this.sessionsDir, `${sessionId}.json`);
+
+    if (!fs.existsSync(sessionFile)) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+    sessionData.testContext = {
+      ...testContext,
+      providedAt: new Date().toISOString()
+    };
+
+    fs.writeFileSync(sessionFile, JSON.stringify(sessionData, null, 2));
+    console.log('[SessionStorage] Saved test context for session:', sessionId);
   }
 }
 

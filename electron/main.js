@@ -9,6 +9,7 @@ const AssertionManager = require('./assertion-manager');
 const TestCaseGenerator = require('./testcase-generator');
 const ExcelGenerator = require('./excel-generator');
 const TestRunner = require('./test-runner');
+const FormMetadataAnalyzer = require('./form-metadata-analyzer');
 require('dotenv').config();
 
 let mainWindow;
@@ -303,49 +304,14 @@ ipcMain.handle('stop-recording', async () => {
     const specFile = sessionStorage.getSpecFile(sessionId);
     savePlaywrightCode(specFile, playwrightCode);
 
+    // Analyze form metadata from actions
+    const formMetadataAnalyzer = new FormMetadataAnalyzer();
+    const formMetadata = formMetadataAnalyzer.analyzeFormMetadata(result.actions);
+    sessionStorage.saveFormMetadata(sessionId, formMetadata);
+
     console.log('[Recording] Session saved:', sessionId);
     console.log('[Recording] Playwright script:', specFile);
-
-    // Analyze flows with AI and generate test cases (async - don't wait for it)
-    let flowAnalysis = null;
-    if (flowAnalyzer && testCaseGenerator) {
-      console.log('[Recording] Starting AI flow analysis and test case generation...');
-      flowAnalyzer.analyzeSession(session)
-        .then(async analysis => {
-          if (analysis.success) {
-            // Save analysis with session
-            sessionStorage.saveFlowAnalysis(sessionId, analysis);
-            console.log('[Recording] Flow analysis complete:', analysis.flowCount, 'flows detected');
-
-            // Generate flow-specific Playwright scripts
-            console.log('[Recording] Generating flow-specific Playwright scripts...');
-            const flowScripts = generateFlowScripts(session, analysis);
-            const savedScripts = saveFlowScripts(sessionId, flowScripts, sessionStorage.sessionsDir);
-            console.log(`[Recording] Generated ${savedScripts.length} flow script(s)`);
-
-            // Generate test cases with AI
-            console.log('[Recording] Generating test cases with AI...');
-            const testCases = await testCaseGenerator.generateTestCases(session, analysis, mainWindow);
-
-            if (testCases.length > 0) {
-              // Generate Excel file
-              const excelGenerator = new ExcelGenerator();
-              const excelPath = path.join(sessionStorage.sessionsDir, `${sessionId}_testcases.xlsx`);
-
-              await excelGenerator.generateTestCaseExcel(session, analysis, testCases, excelPath);
-              console.log(`[Recording] ✅ Generated ${testCases.length} test cases in Excel: ${excelPath}`);
-
-              // Save test case count to session
-              sessionStorage.saveTestCaseMetadata(sessionId, {
-                testCaseCount: testCases.length,
-                excelPath: excelPath,
-                generatedAt: new Date().toISOString()
-              });
-            }
-          }
-        })
-        .catch(err => console.error('[Recording] AI processing error:', err.message));
-    }
+    console.log('[Recording] Test case generation is now manual - use "Generate Test Cases" button');
 
     return {
       success: true,
@@ -598,6 +564,77 @@ ipcMain.handle('regenerate-test-cases', async (event, sessionId) => {
     };
   } catch (error) {
     console.error('[IPC] Error regenerating test cases:', error);
+    return { success: false, message: error.message };
+  }
+});
+
+// Generate test cases with user-provided context
+ipcMain.handle('generate-test-cases-with-context', async (event, sessionId, context) => {
+  console.log('[IPC] generate-test-cases-with-context:', sessionId);
+  console.log('[IPC] Context:', context);
+
+  if (!sessionStorage || !flowAnalyzer || !testCaseGenerator) {
+    return { success: false, message: 'Not initialized' };
+  }
+
+  try {
+    // Load session
+    const session = sessionStorage.loadSession(sessionId);
+
+    // Save test context to session
+    sessionStorage.saveTestContext(sessionId, context);
+
+    // Analyze flows if not already done
+    let flowAnalysis = sessionStorage.loadFlowAnalysis(sessionId);
+    if (!flowAnalysis) {
+      console.log('[IPC] No flow analysis found, generating...');
+      flowAnalysis = await flowAnalyzer.analyzeSession(session);
+      if (flowAnalysis.success) {
+        sessionStorage.saveFlowAnalysis(sessionId, flowAnalysis);
+      } else {
+        return { success: false, message: 'Failed to analyze flows' };
+      }
+    }
+
+    // Generate flow-specific Playwright scripts
+    console.log('[IPC] Generating flow-specific Playwright scripts...');
+    const flowScripts = generateFlowScripts(session, flowAnalysis);
+    const savedScripts = saveFlowScripts(sessionId, flowScripts, sessionStorage.sessionsDir);
+    console.log(`[IPC] Generated ${savedScripts.length} flow script(s)`);
+
+    // Generate test cases with AI using context
+    console.log('[IPC] Generating test cases with context...');
+    const testCases = await testCaseGenerator.generateTestCasesWithContext(
+      session,
+      flowAnalysis,
+      context,
+      mainWindow
+    );
+
+    if (testCases.length === 0) {
+      return { success: false, message: 'No test cases generated' };
+    }
+
+    // Generate Excel file
+    const excelGenerator = new ExcelGenerator();
+    const excelPath = path.join(sessionStorage.sessionsDir, `${sessionId}_testcases.xlsx`);
+    await excelGenerator.generateTestCaseExcel(session, flowAnalysis, testCases, excelPath);
+
+    // Update metadata
+    sessionStorage.saveTestCaseMetadata(sessionId, {
+      testCaseCount: testCases.length,
+      excelPath: excelPath,
+      generatedAt: new Date().toISOString()
+    });
+
+    console.log(`[IPC] ✅ Generated ${testCases.length} test cases with context`);
+    return {
+      success: true,
+      testCaseCount: testCases.length,
+      excelPath
+    };
+  } catch (error) {
+    console.error('[IPC] Error generating test cases with context:', error);
     return { success: false, message: error.message };
   }
 });
