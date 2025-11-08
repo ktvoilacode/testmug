@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+dist-electron/
+out/
+build/
+release/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+*.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Electron
+*.asar
+
+# Test data (recordings, results)
+recordings/
+test-cases/
+results/
+screenshots/
+reports/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Configuration (keep template, ignore actual config with secrets)
+config/settings.json
+
+# Coverage
+coverage/
+.nyc_output/
+
+# TypeScript
+*.tsbuildinfo
