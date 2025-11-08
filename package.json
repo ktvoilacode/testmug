@@ -15,6 +15,10 @@
     "package": "electron-builder"
   },
   "dependencies": {
+    "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
+    "openai": "^6.8.1",
+    "playwright": "^1.56.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-icons": "^5.5.0"
