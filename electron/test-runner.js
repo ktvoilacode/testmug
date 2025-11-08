@@ -161,6 +161,26 @@ class TestRunner {
 
       page = await context.newPage();
 
+      // Handle dialogs automatically (alerts, confirms, prompts)
+      page.on('dialog', async dialog => {
+        console.log(`[TestRunner] Dialog detected: ${dialog.type()} - "${dialog.message()}"`);
+
+        // Auto-accept all dialogs during test execution
+        // For confirm dialogs: accept (click OK/Yes)
+        // For alert dialogs: dismiss
+        // For prompt dialogs: accept with default value
+        try {
+          if (dialog.type() === 'prompt') {
+            await dialog.accept(dialog.defaultValue() || '');
+          } else {
+            await dialog.accept();
+          }
+          console.log(`[TestRunner] Dialog accepted: ${dialog.type()}`);
+        } catch (err) {
+          console.error(`[TestRunner] Error handling dialog:`, err.message);
+        }
+      });
+
       // Run the test
       const result = await this.runSingleTestInPage(testCase, session, flowAnalysis, screenshotsDir, page);
 

@@ -136,6 +136,42 @@ function createBrowserView() {
     browserView.webContents.loadURL(errorUrl);
   });
 
+  // Handle beforeunload dialogs (prevent "Are you sure you want to leave?" popups)
+  browserView.webContents.on('will-prevent-unload', (event) => {
+    event.preventDefault();
+  });
+
+  // Inject code to auto-handle JavaScript dialogs when page loads
+  browserView.webContents.on('did-finish-load', () => {
+    // Override alert, confirm, and prompt to auto-handle them
+    browserView.webContents.executeJavaScript(`
+      (function() {
+        // Store original functions
+        window._originalAlert = window.alert;
+        window._originalConfirm = window.confirm;
+        window._originalPrompt = window.prompt;
+
+        // Override with auto-accepting versions
+        window.alert = function(message) {
+          console.log('[Testmug] Auto-handled alert:', message);
+          return undefined;
+        };
+
+        window.confirm = function(message) {
+          console.log('[Testmug] Auto-accepted confirm:', message);
+          return true; // Always return true (OK/Yes)
+        };
+
+        window.prompt = function(message, defaultValue) {
+          console.log('[Testmug] Auto-accepted prompt:', message);
+          return defaultValue || ''; // Return default value or empty string
+        };
+      })();
+    `).catch(err => {
+      console.error('[BrowserView] Error injecting dialog handlers:', err);
+    });
+  });
+
   // Load welcome page
   browserView.webContents.loadFile(path.join(__dirname, 'welcome.html'));
 }
