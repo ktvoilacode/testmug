@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   MdChevronRight, MdChevronLeft, MdArrowBack, MdArrowForward, MdLock,
-  MdRefresh, MdClose, MdSettings, MdHistory, MdDelete, MdPlayArrow,
+  MdRefresh, MdClose, MdHistory, MdDelete, MdPlayArrow,
   MdTableChart, MdLink, MdCalendarToday, MdCode, MdTimer, MdCheckCircle,
   MdLoop
 } from 'react-icons/md';
@@ -45,26 +45,13 @@ function App() {
   const [isSecure, setIsSecure] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
-  const [rightPanelView, setRightPanelView] = useState<'chat' | 'settings' | 'history'>('chat');
-  const [llmProvider, setLlmProvider] = useState('openai');
-  const [apiKey, setApiKey] = useState('');
+  const [rightPanelView, setRightPanelView] = useState<'chat' | 'history'>('chat');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionName, setEditingSessionName] = useState('');
   const [testProgress, setTestProgress] = useState<{total: number, completed: number, passed: number, failed: number} | null>(null);
   const [runningTestSessionId, setRunningTestSessionId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState<{total: number, completed: number, current: string} | null>(null);
   const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(null);
-  const [showContextModal, setShowContextModal] = useState(false);
-  const [contextModalSession, setContextModalSession] = useState<any | null>(null);
-  const [contextForm, setContextForm] = useState<{
-    validData: { [key: string]: string };
-    invalidData: { [key: string]: string };
-    additionalContext: string;
-  }>({
-    validData: {},
-    invalidData: {},
-    additionalContext: ''
-  });
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -223,6 +210,15 @@ function App() {
   };
 
   const handleStartRecording = async () => {
+    // Check if URL is entered
+    if (!url || url.trim() === '') {
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: `⚠️ Please enter a URL in the address bar before recording.`
+      }]);
+      return;
+    }
+
     try {
       await window.electron.startRecording();
       setIsRecording(true);
@@ -275,73 +271,25 @@ function App() {
     }
   };
 
-  const handleOpenContextModal = (session: any) => {
-    setContextModalSession(session);
-
-    // Switch to history view and show chat panel
-    setRightPanelView('history');
-    if (!showChat) {
-      toggleChat();
-    }
-
-    // Build dynamic form based on detected fields
-    const formMetadata = session.formMetadata;
-    const savedContext = session.testContext;
-
-    const validData: { [key: string]: string } = {};
-    const invalidData: { [key: string]: string } = {};
-
-    // For each detected field, create entries in valid/invalid data
-    if (formMetadata?.detectedFields) {
-      formMetadata.detectedFields.forEach((field: any) => {
-        const fieldKey = field.label || field.selector;
-
-        // Pre-fill valid data with recorded value or saved context
-        validData[fieldKey] = savedContext?.validData?.[fieldKey] || field.recordedValue || '';
-
-        // Pre-fill invalid data with saved context
-        invalidData[fieldKey] = savedContext?.invalidData?.[fieldKey] || '';
-      });
-    }
-
-    const newForm = {
-      validData,
-      invalidData,
-      additionalContext: savedContext?.additionalContext || ''
-    };
-
-    setContextForm(newForm);
-    setShowContextModal(true);
-  };
-
-  const handleCloseContextModal = () => {
-    setShowContextModal(false);
-    setContextModalSession(null);
-  };
-
-  const handleGenerateWithContext = async () => {
-    if (!contextModalSession) return;
-
-    // Close modal
-    setShowContextModal(false);
-
+  // Auto-generate test cases without context modal (simplified for MVP)
+  const handleGenerateTestCases = async (session: any) => {
     // Start generation with progress
-    setGeneratingSessionId(contextModalSession.id);
+    setGeneratingSessionId(session.id);
     setGenerationProgress({
-      total: contextModalSession.flowAnalysis?.flowCount || 1,
+      total: session.flowAnalysis?.flowCount || 1,
       completed: 0,
       current: 'Starting generation...'
     });
 
     setMessages(prev => [...prev, {
       role: 'system',
-      content: `🎯 Generating test cases with your context...`
+      content: `🎯 Generating test cases automatically...`
     }]);
 
-    // TODO: Call IPC handler with context
+    // Auto-generate with minimal context (empty object)
     const result = await window.electron.generateTestCasesWithContext(
-      contextModalSession.id,
-      contextForm
+      session.id,
+      { validData: {}, invalidData: {}, additionalContext: '' }
     );
 
     setGenerationProgress(null);
@@ -350,7 +298,7 @@ function App() {
     setMessages(prev => [...prev, {
       role: 'system',
       content: result.success
-        ? `✅ Generated ${result.testCaseCount} test cases!`
+        ? `✅ Generated ${result.testCaseCount} test cases! Open the Excel file to edit/customize.`
         : `❌ Generation failed: ${result.message}`
     }]);
 
@@ -515,38 +463,32 @@ function App() {
           </button>
         </div>
 
-        {/* Recording Controls */}
-        <div className="recording-controls">
+        {/* Right Side Controls */}
+        <div className="right-controls">
           {!isRecording ? (
             <button
               className="record-btn"
               onClick={handleStartRecording}
               title="Start recording test flow"
             >
-              <span className="record-icon">⬤</span> Record
+              <span className="record-icon">●</span>
+              <span>Record</span>
             </button>
           ) : (
-            <button className="record-btn stop" onClick={handleStopRecording}>
-              <span className="stop-icon">⬛</span> Stop
+            <button className="record-btn recording" onClick={handleStopRecording} title="Stop recording">
+              <span>Stop</span>
+              <span className="stop-icon">■</span>
             </button>
           )}
-        </div>
 
-        <div className="status">
-          {isRecording && (
-            <span className="recording-indicator">
-              <span className="blink">●</span> Recording
-            </span>
-          )}
+          <button
+            className="chat-toggle-button"
+            onClick={toggleChat}
+            title={showChat ? 'Hide panel' : 'Show panel'}
+          >
+            {showChat ? <MdChevronRight size={20} /> : <MdChevronLeft size={20} />}
+          </button>
         </div>
-
-        <button
-          className="chat-toggle-button"
-          onClick={toggleChat}
-          title={showChat ? 'Hide panel' : 'Show panel'}
-        >
-          {showChat ? <MdChevronRight size={20} /> : <MdChevronLeft size={20} />}
-        </button>
       </div>
 
       <div className="main-content">
@@ -566,12 +508,6 @@ function App() {
                 onClick={() => setRightPanelView('history')}
               >
                 History
-              </button>
-              <button
-                className={`panel-tab ${rightPanelView === 'settings' ? 'active' : ''}`}
-                onClick={() => setRightPanelView('settings')}
-              >
-                Settings
               </button>
             </div>
 
@@ -648,55 +584,6 @@ function App() {
                   </div>
                 )}
               </>
-            )}
-
-            {/* Settings View */}
-            {rightPanelView === 'settings' && (
-              <div className="panel-content">
-                <div className="panel-body">
-                  <div className="setting-section">
-                    <h3>LLM Configuration</h3>
-                    <p className="setting-description">
-                      Configure your AI provider for test case generation
-                    </p>
-
-                    <div className="form-group">
-                      <label>AI Provider</label>
-                      <select
-                        value={llmProvider}
-                        onChange={(e) => setLlmProvider(e.target.value)}
-                        className="form-select"
-                      >
-                        <option value="openai">OpenAI (GPT-4)</option>
-                        <option value="grok">Grok (xAI)</option>
-                        <option value="mistral">Mistral AI</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>API Key</label>
-                      <input
-                        type="password"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="Enter your API key"
-                        className="form-input"
-                      />
-                      <p className="input-hint">
-                        {llmProvider === 'openai' && 'Get your API key from platform.openai.com'}
-                        {llmProvider === 'grok' && 'Get your API key from x.ai'}
-                        {llmProvider === 'mistral' && 'Get your API key from console.mistral.ai'}
-                      </p>
-                    </div>
-
-                    {!apiKey && (
-                      <div className="warning-box">
-                        <p>⚠️ API key required for automated test generation</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
             )}
 
             {/* History View */}
@@ -898,8 +785,8 @@ function App() {
                               // No test cases yet - show Generate button
                               <button
                                 className="action-btn generate-primary"
-                                onClick={() => handleOpenContextModal(session)}
-                                title="Generate test cases with AI"
+                                onClick={() => handleGenerateTestCases(session)}
+                                title="Auto-generate test cases with AI"
                               >
                                 <MdTableChart size={16} /> Generate Test Cases
                               </button>
@@ -1002,116 +889,6 @@ function App() {
                 </div>
               </div>
             )}
-
-            {/* Context Modal - Inside Chat Panel */}
-            {showContextModal && contextModalSession && (
-        <div className="modal-overlay" onClick={handleCloseContextModal}>
-          <div className="context-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Generate Test Cases</h3>
-              <button className="modal-close" onClick={handleCloseContextModal}>
-                <MdClose size={24} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {/* Detected Fields Section */}
-              {contextModalSession.formMetadata && contextModalSession.formMetadata.detectedFields && contextModalSession.formMetadata.detectedFields.length > 0 && (
-                <div className="modal-section">
-                  <label className="section-label">📝 Detected Fields</label>
-                  <div className="detected-fields">
-                    {contextModalSession.formMetadata.detectedFields.map((field: any, idx: number) => (
-                      <div key={idx} className="field-item">
-                        <span className="field-selector">{field.selector}</span>
-                        <span className="field-type">({field.type})</span>
-                        <span className="field-arrow">→</span>
-                        <span className="field-value">"{field.recordedValue}"</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Valid Test Data Section - Dynamic */}
-              {contextModalSession.formMetadata && contextModalSession.formMetadata.detectedFields && contextModalSession.formMetadata.detectedFields.length > 0 && (
-                <div className="modal-section">
-                  <label className="section-label">✅ Valid Test Data (for PASS tests)</label>
-                  <div className="dynamic-fields">
-                    {contextModalSession.formMetadata.detectedFields.map((field: any, idx: number) => {
-                      const fieldKey = field.label || field.selector;
-                      return (
-                        <div key={idx} className="form-field">
-                          <label>{field.label} <span className="field-hint">({field.type})</span></label>
-                          <input
-                            type={field.type === 'password' ? 'text' : field.type}
-                            value={contextForm.validData[fieldKey] || ''}
-                            onChange={(e) => setContextForm({
-                              ...contextForm,
-                              validData: { ...contextForm.validData, [fieldKey]: e.target.value }
-                            })}
-                            placeholder={`Valid ${field.label.toLowerCase()}`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Invalid Test Data Section - Dynamic */}
-              {contextModalSession.formMetadata && contextModalSession.formMetadata.detectedFields && contextModalSession.formMetadata.detectedFields.length > 0 && (
-                <div className="modal-section">
-                  <label className="section-label">❌ Invalid Test Data (for FAIL tests)</label>
-                  <div className="dynamic-fields">
-                    {contextModalSession.formMetadata.detectedFields.map((field: any, idx: number) => {
-                      const fieldKey = field.label || field.selector;
-                      return (
-                        <div key={idx} className="form-field">
-                          <label>Invalid {field.label} <span className="field-hint">({field.type})</span></label>
-                          <input
-                            type={field.type === 'password' ? 'text' : field.type}
-                            value={contextForm.invalidData[fieldKey] || ''}
-                            onChange={(e) => setContextForm({
-                              ...contextForm,
-                              invalidData: { ...contextForm.invalidData, [fieldKey]: e.target.value }
-                            })}
-                            placeholder={`Invalid ${field.label.toLowerCase()}`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Additional Context Section */}
-              <div className="modal-section">
-                <label className="section-label">💡 Additional Context (optional)</label>
-                <textarea
-                  className="context-textarea"
-                  value={contextForm.additionalContext}
-                  onChange={(e) => setContextForm({...contextForm, additionalContext: e.target.value})}
-                  placeholder="Describe edge cases, expected errors, validation rules, etc.&#10;Example:&#10;- Empty fields show 'Required' error&#10;- Password <8 chars shows 'Too short'&#10;- Wrong credentials show 'Invalid login'"
-                  rows={5}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="modal-btn cancel" onClick={handleCloseContextModal}>
-                Cancel
-              </button>
-              <button
-                className="modal-btn generate"
-                onClick={handleGenerateWithContext}
-                disabled={Object.keys(contextForm.validData).length === 0 || Object.values(contextForm.validData).every(v => !v)}
-              >
-                <MdTableChart size={16} /> Generate Test Cases
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
           </div>
         )}
 

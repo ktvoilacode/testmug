@@ -158,10 +158,12 @@ USER-ADDED ASSERTIONS (added via right-click during recording):
 ${userAssertions.length > 0 ? JSON.stringify(assertionsInfo, null, 2) : 'None'}
 
 Identify:
-1. How many distinct test flows are present (e.g., one successful login, one failed login)
+1. How many distinct END-TO-END test flows are present
+   - Each flow should be a complete workflow (e.g., "Login → Fill CRM Form → Logout")
+   - Don't split Login/Logout into separate flows unless they occur in isolation
 2. For each flow, determine if it's POSITIVE (happy path) or NEGATIVE (error case)
 3. Identify assertion points (elements to check for success/failure)
-4. Which action steps belong to which flow
+4. Which action steps belong to which flow (keep Login→Actions→Logout together)
 
 Return JSON in this exact format:
 {
@@ -191,9 +193,21 @@ Return JSON in this exact format:
 }
 
 IMPORTANT:
-1. If you detect that the user performed the same action twice (like trying login with valid credentials, then invalid), split them into two separate flows.
-2. Map user-added assertions to flows based on their timestamps - if an assertion was added during a specific flow's time window, include its ID in "userAssertionIds" for that flow.
-3. Include user assertions in the "assertions" array with source: "user_added".`;
+1. FLOW DETECTION RULES:
+   - Treat Login → Actions → Logout as ONE COMPLETE FLOW (keep together)
+   - Only split into separate flows if the user performs the SAME workflow twice with different data
+   - Example: "Login → Fill Form → Logout" (once) = 1 flow
+   - Example: "Login → Fill Form → Logout" (twice with different data) = 2 flows
+   - Login/Logout should NOT be separate flows unless performed in isolation
+
+2. FLOW GROUPING STRATEGY:
+   - If you see: Login → Multiple Actions → Logout = Single "End-to-End" flow
+   - If you see: Login → Logout → Login → Logout = Two separate flows
+   - The key is whether it's ONE continuous workflow or MULTIPLE iterations
+
+3. Map user-added assertions to flows based on their timestamps - if an assertion was added during a specific flow's time window, include its ID in "userAssertionIds" for that flow.
+
+4. Include user assertions in the "assertions" array with source: "user_added".`;
   }
 
   /**

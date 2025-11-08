@@ -10,6 +10,7 @@ class Recorder {
     this.recordedActions = [];
     this.consoleListener = null;
     this.navigationListeners = [];
+    this.startUrl = null;
   }
 
   /**
@@ -23,6 +24,10 @@ class Recorder {
     console.log('[Recorder] Starting recording...');
     this.isRecording = true;
     this.recordedActions = [];
+
+    // Capture the starting URL
+    this.startUrl = this.browserView.webContents.getURL();
+    console.log('[Recorder] Start URL:', this.startUrl);
 
     // Inject event capture code into the page
     await this.injectEventCapture();
@@ -54,11 +59,13 @@ class Recorder {
     this.recordedActions.sort((a, b) => a.timestamp - b.timestamp);
 
     console.log(`[Recorder] Captured ${this.recordedActions.length} actions`);
+    console.log('[Recorder] Start URL was:', this.startUrl);
 
     return {
       success: true,
       actions: this.recordedActions,
-      actionCount: this.recordedActions.length
+      actionCount: this.recordedActions.length,
+      startUrl: this.startUrl
     };
   }
 

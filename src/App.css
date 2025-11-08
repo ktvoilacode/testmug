@@ -42,27 +42,6 @@ body {
   z-index: 100;
 }
 
-.chat-toggle-button {
-  width: 36px;
-  height: 36px;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #6b7280;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-  margin-left: auto;
-}
-
-.chat-toggle-button:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
-  color: #2e2e2e;
-}
-
 .logo h1 {
   font-size: 16px;
   font-weight: 600;
@@ -115,6 +94,7 @@ body {
   max-width: 700px;
   align-items: center;
   position: relative;
+  margin-right: auto;
 }
 
 .secure-indicator {
@@ -182,13 +162,14 @@ body {
   color: #ef4444;
 }
 
-/* Recording Controls in Top Bar */
-.recording-controls {
+/* Right Side Controls */
+.right-controls {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
 
+/* Recording Controls in Top Bar */
 .record-btn {
   height: 36px;
   border: 1px solid #e5e5e5;
@@ -216,19 +197,39 @@ body {
   font-size: 16px;
 }
 
-.record-btn.stop {
+.record-btn.recording {
   background: #ef4444;
   color: white;
   border-color: #ef4444;
 }
 
-.record-btn.stop:hover {
+.record-btn.recording:hover {
   background: #dc2626;
   border-color: #dc2626;
 }
 
 .stop-icon {
   font-size: 12px;
+}
+
+.chat-toggle-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #6b7280;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.chat-toggle-button:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #2e2e2e;
 }
 
 .status {
