@@ -9,9 +9,10 @@ import {
 import './App.css';
 
 interface Message {
-  role: 'user' | 'assistant' | 'system' | 'session-card';
+  role: 'user' | 'assistant' | 'system' | 'session-card' | 'quick-actions';
   content: string | React.ReactNode;
   sessionData?: any;
+  actionType?: 'test-actions' | 'replay-actions';
 }
 
 interface RecordedAction {
@@ -252,9 +253,14 @@ function App() {
     setInput('');
 
     // Handle commands
-    // Check for "open" or "load" commands
+    // Check for "open" or "load" commands (but exclude test-related keywords)
     const openMatch = userInput.match(/^(open|load|go to|navigate to)\s+(.+)$/);
-    if (openMatch) {
+    const testRelatedKeywords = ['excel', 'test', 'tests', 'testcase', 'testcases', 'test case', 'test cases', 'report', 'reports'];
+    const isTestCommand = openMatch && testRelatedKeywords.some(keyword =>
+      openMatch[2].toLowerCase().includes(keyword)
+    );
+
+    if (openMatch && !isTestCommand) {
       let targetUrl = openMatch[2].trim();
 
       // Add .com suffix if it's a single word without a domain extension
@@ -286,12 +292,380 @@ function App() {
       return;
     }
 
-    // Placeholder for AI integration
-    const response: Message = {
-      role: 'assistant',
-      content: `You said: "${input}". Try commands like "open google.com" or "load github.com"`
-    };
-    setMessages((prev) => [...prev, response]);
+    // Get the most recent session with test cases
+    const recentSessionWithTests = sessions.find(s => s.testCaseMetadata?.testCaseCount > 0);
+    // Get the most recent session (for replay/generate)
+    const recentSession = sessions.length > 0 ? sessions[0] : null;
+
+    // Command: Open Excel / Open Test Cases / View Excel / View Test Cases
+    if (/^(open|view|show)\s+(excel|test\s*cases?|tests?)$/i.test(userInput)) {
+      if (!recentSessionWithTests) {
+        if (!recentSession) {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: (
+              <span className="message-with-icon">
+                <MdWarning size={16} className="msg-icon warning" />
+                No sessions found. Please record a session first, then generate tests.
+              </span>
+            )
+          }]);
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: (
+              <span className="message-with-icon">
+                <MdWarning size={16} className="msg-icon warning" />
+                No test cases found. Please use "generate tests" first.
+              </span>
+            )
+          }]);
+        }
+        return;
+      }
+
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: (
+          <span className="message-with-icon">
+            <MdTableChart size={16} className="msg-icon info" />
+            Opening test cases Excel file...
+          </span>
+        )
+      }]);
+
+      const result = await window.electron.openTestCases(recentSessionWithTests.id);
+      if (!result.success) {
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdError size={16} className="msg-icon warning" />
+              Failed to open Excel: {result.message}
+            </span>
+          )
+        }]);
+      } else {
+        // Add quick action buttons
+        setMessages(prev => [...prev, {
+          role: 'quick-actions',
+          content: '',
+          actionType: 'test-actions',
+          sessionData: recentSessionWithTests
+        }]);
+      }
+      return;
+    }
+
+    // Command: Open Report / View Report
+    if (/^(open|view|show)\s+(report|test\s*report)$/i.test(userInput)) {
+      // Check if there's a completed test session
+      const completedSession = sessions.find(s => completedTestSessions[s.id]);
+
+      if (!completedSession) {
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdWarning size={16} className="msg-icon warning" />
+              No test report found. Please run tests first using "run tests".
+            </span>
+          )
+        }]);
+        return;
+      }
+
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: (
+          <span className="message-with-icon">
+            <MdTableChart size={16} className="msg-icon info" />
+            Opening test report...
+          </span>
+        )
+      }]);
+
+      const result = await window.electron.openTestCases(completedSession.id);
+      if (!result.success) {
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdError size={16} className="msg-icon warning" />
+              Failed to open report: {result.message}
+            </span>
+          )
+        }]);
+      } else {
+        // Add quick action buttons
+        setMessages(prev => [...prev, {
+          role: 'quick-actions',
+          content: '',
+          actionType: 'test-actions',
+          sessionData: completedSession
+        }]);
+      }
+      return;
+    }
+
+    // Command: Generate Tests / Generate Test Cases
+    if (/^generate\s+(test\s*cases?|tests?)$/i.test(userInput)) {
+      if (!recentSession) {
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdWarning size={16} className="msg-icon warning" />
+              No sessions found. Please record a session first.
+            </span>
+          )
+        }]);
+        return;
+      }
+
+      if (recentSession.testCaseMetadata?.testCaseCount > 0) {
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdWarning size={16} className="msg-icon warning" />
+              Test cases already exist for the latest session. Use "regenerate tests" to create new ones.
+            </span>
+          )
+        }]);
+        return;
+      }
+
+      await handleGenerateTestCases(recentSession);
+
+      // Wait a bit for generation to complete, then add quick actions
+      setTimeout(async () => {
+        const updatedSessions = await window.electron.getSessions();
+        if (updatedSessions.success) {
+          const updatedSession = updatedSessions.sessions.find((s: any) => s.id === recentSession.id);
+          if (updatedSession && updatedSession.testCaseMetadata?.testCaseCount > 0) {
+            setMessages(prev => [...prev, {
+              role: 'quick-actions',
+              content: '',
+              actionType: 'test-actions',
+              sessionData: updatedSession
+            }]);
+          }
+        }
+      }, 2000);
+      return;
+    }
+
+    // Command: Regenerate Tests / Regenerate Test Cases
+    if (/^regenerate\s+(test\s*cases?|tests?)$/i.test(userInput)) {
+      if (!recentSessionWithTests) {
+        if (!recentSession) {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: (
+              <span className="message-with-icon">
+                <MdWarning size={16} className="msg-icon warning" />
+                No sessions found. Please record a session first.
+              </span>
+            )
+          }]);
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: (
+              <span className="message-with-icon">
+                <MdWarning size={16} className="msg-icon warning" />
+                No test cases found. Use "generate tests" first.
+              </span>
+            )
+          }]);
+        }
+        return;
+      }
+
+      await handleGenerateTestCases(recentSessionWithTests);
+
+      // Wait a bit for generation to complete, then add quick actions
+      setTimeout(async () => {
+        const updatedSessions = await window.electron.getSessions();
+        if (updatedSessions.success) {
+          const updatedSession = updatedSessions.sessions.find((s: any) => s.id === recentSessionWithTests.id);
+          if (updatedSession) {
+            setMessages(prev => [...prev, {
+              role: 'quick-actions',
+              content: '',
+              actionType: 'test-actions',
+              sessionData: updatedSession
+            }]);
+          }
+        }
+      }, 2000);
+      return;
+    }
+
+    // Command: Run Tests / Run Test Cases / Execute Tests
+    if (/^(run|execute)\s+(test\s*cases?|tests?|all\s+tests?)$/i.test(userInput)) {
+      if (!recentSessionWithTests) {
+        if (!recentSession) {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: (
+              <span className="message-with-icon">
+                <MdWarning size={16} className="msg-icon warning" />
+                No sessions found. Please record a session first, then generate tests.
+              </span>
+            )
+          }]);
+        } else {
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: (
+              <span className="message-with-icon">
+                <MdWarning size={16} className="msg-icon warning" />
+                No test cases found. Please use "generate tests" first.
+              </span>
+            )
+          }]);
+        }
+        return;
+      }
+
+      const sessionId = recentSessionWithTests.id;
+
+      // Add a progress message that we'll update
+      setMessages(prev => [...prev, {
+        role: 'test-progress',
+        content: '',
+        sessionData: recentSessionWithTests
+      }]);
+
+      setRunningTestSessionId(sessionId);
+      setTestProgress({
+        total: recentSessionWithTests.testCaseMetadata.testCaseCount,
+        completed: 0,
+        passed: 0,
+        failed: 0
+      });
+
+      const result = await window.electron.runAllTests(sessionId);
+
+      setTestProgress(null);
+      setRunningTestSessionId(null);
+
+      // Save completion data
+      if (result.success) {
+        setCompletedTestSessions(prev => ({
+          ...prev,
+          [sessionId]: {
+            passed: result.passed,
+            failed: result.failed,
+            total: result.total,
+            reportPath: result.reportPath
+          }
+        }));
+
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdDone size={16} className="msg-icon success" />
+              Tests completed: {result.passed}/{result.total} passed ({result.failed} failed)
+            </span>
+          )
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdError size={16} className="msg-icon warning" />
+              Test execution failed: {result.message}
+            </span>
+          )
+        }]);
+      }
+
+      // Add quick action buttons
+      setMessages(prev => [...prev, {
+        role: 'quick-actions',
+        content: '',
+        actionType: 'test-actions',
+        sessionData: recentSessionWithTests
+      }]);
+      return;
+    }
+
+    // Command: Replay / Replay Session
+    if (/^replay(\s+session)?$/i.test(userInput)) {
+      if (!recentSession) {
+        setMessages(prev => [...prev, {
+          role: 'system',
+          content: (
+            <span className="message-with-icon">
+              <MdWarning size={16} className="msg-icon warning" />
+              No sessions found. Please record a session first.
+            </span>
+          )
+        }]);
+        return;
+      }
+
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: (
+          <span className="message-with-icon">
+            <MdPlayArrow size={16} className="msg-icon info" />
+            Replaying session...
+          </span>
+        )
+      }]);
+
+      const result = await window.electron.replaySession(recentSession.id, 'normal');
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: result.success ? (
+          <span className="message-with-icon">
+            <MdDone size={16} className="msg-icon success" />
+            Replay completed!
+          </span>
+        ) : (
+          <span className="message-with-icon">
+            <MdError size={16} className="msg-icon warning" />
+            Replay failed: {result.message}
+          </span>
+        )
+      }]);
+
+      // Add quick action buttons
+      setMessages(prev => [...prev, {
+        role: 'quick-actions',
+        content: '',
+        actionType: 'replay-actions',
+        sessionData: recentSession
+      }]);
+      return;
+    }
+
+    // If no command matched, show available commands
+    setMessages(prev => [...prev, {
+      role: 'system',
+      content: (
+        <div>
+          <span className="message-with-icon">
+            <MdSmartToy size={16} className="msg-icon info" />
+            Available commands:
+          </span>
+          <div style={{ marginTop: '8px', fontSize: '13px', lineHeight: '1.6' }}>
+            • <strong>open excel</strong> - Open test cases spreadsheet<br/>
+            • <strong>generate tests</strong> - Generate test cases<br/>
+            • <strong>regenerate tests</strong> - Regenerate test cases<br/>
+            • <strong>run tests</strong> - Execute all test cases<br/>
+            • <strong>replay</strong> - Replay the latest session<br/>
+            • <strong>open [site]</strong> - Navigate to a website
+          </div>
+        </div>
+      )
+    }]);
   };
 
   const handleStartRecording = async () => {
@@ -684,6 +1058,21 @@ function App() {
               </button>
             </div>
 
+            {/* Fixed Test Progress Bar */}
+            {runningTestSessionId && testProgress && (
+              <div className="fixed-test-progress">
+                <span className="status-text">
+                  Running tests... {testProgress.completed}/{testProgress.total}
+                </span>
+                <div className="status-progress">
+                  <div
+                    className="status-progress-fill"
+                    style={{ width: `${(testProgress.completed / testProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+
             {/* Chat View */}
             {rightPanelView === 'chat' && (
               <>
@@ -691,7 +1080,169 @@ function App() {
                 <div className="chat-container">
                   {messages.map((msg, index) => (
                     <div key={index} className={`message ${msg.role}`}>
-                      {msg.role === 'session-card' && (msg as any).sessionData ? (
+                      {msg.role === 'quick-actions' && (msg as any).sessionData ? (
+                        <div className="chat-quick-actions">
+                          <div style={{ fontSize: '13px', color: '#6b7280' }}>
+                            {(msg as any).actionType === 'test-actions'
+                              ? (completedTestSessions[(msg as any).sessionData.id]
+                                  ? `Report ready: ${completedTestSessions[(msg as any).sessionData.id].passed}/${completedTestSessions[(msg as any).sessionData.id].total} passed`
+                                  : 'Test cases ready. What would you like to do?')
+                              : 'Replay completed successfully.'}
+                          </div>
+                          <div className="chat-action-links">
+                            {(msg as any).actionType === 'test-actions' ? (
+                              completedTestSessions[(msg as any).sessionData.id] ? (
+                                <>
+                                  <a
+                                    className="chat-action-link"
+                                    onClick={async () => {
+                                      await window.electron.openTestCases((msg as any).sessionData.id);
+                                    }}
+                                  >
+                                    <MdTableChart size={14} /> Open Report
+                                  </a>
+                                  <span className="chat-action-separator">•</span>
+                                  <a
+                                    className="chat-action-link secondary"
+                                    onClick={async () => {
+                                      const sessionId = (msg as any).sessionData.id;
+                                      setRunningTestSessionId(sessionId);
+                                      setTestProgress({
+                                        total: (msg as any).sessionData.testCaseMetadata.testCaseCount,
+                                        completed: 0,
+                                        passed: 0,
+                                        failed: 0
+                                      });
+
+                                      const result = await window.electron.runAllTests(sessionId);
+
+                                      setTestProgress(null);
+                                      setRunningTestSessionId(null);
+
+                                      if (result.success) {
+                                        setCompletedTestSessions(prev => ({
+                                          ...prev,
+                                          [sessionId]: {
+                                            passed: result.passed,
+                                            failed: result.failed,
+                                            total: result.total,
+                                            reportPath: result.reportPath
+                                          }
+                                        }));
+                                      }
+                                    }}
+                                  >
+                                    <MdRefresh size={14} /> Rerun
+                                  </a>
+                                </>
+                              ) : (
+                                <>
+                                  <a
+                                    className="chat-action-link"
+                                    onClick={async () => {
+                                      const result = await window.electron.openTestCases((msg as any).sessionData.id);
+                                      if (!result.success) {
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: (
+                                            <span className="message-with-icon">
+                                              <MdError size={16} className="msg-icon warning" />
+                                              Failed to open Excel: {result.message}
+                                            </span>
+                                          )
+                                        }]);
+                                      }
+                                    }}
+                                  >
+                                    <MdTableChart size={14} /> Excel
+                                  </a>
+                                  <span className="chat-action-separator">•</span>
+                                  <a
+                                    className="chat-action-link secondary"
+                                    onClick={() => handleGenerateTestCases((msg as any).sessionData)}
+                                  >
+                                    <MdRefresh size={14} /> Regenerate
+                                  </a>
+                                  <span className="chat-action-separator">•</span>
+                                  <a
+                                    className="chat-action-link secondary"
+                                    onClick={async () => {
+                                      const sessionId = (msg as any).sessionData.id;
+                                      setRunningTestSessionId(sessionId);
+                                      setTestProgress({
+                                        total: (msg as any).sessionData.testCaseMetadata.testCaseCount,
+                                        completed: 0,
+                                        passed: 0,
+                                        failed: 0
+                                      });
+
+                                      const result = await window.electron.runAllTests(sessionId);
+
+                                      setTestProgress(null);
+                                      setRunningTestSessionId(null);
+
+                                      if (result.success) {
+                                        setCompletedTestSessions(prev => ({
+                                          ...prev,
+                                          [sessionId]: {
+                                            passed: result.passed,
+                                            failed: result.failed,
+                                            total: result.total,
+                                            reportPath: result.reportPath
+                                          }
+                                        }));
+                                      }
+                                    }}
+                                  >
+                                    <MdPlayArrow size={14} /> Run
+                                  </a>
+                                </>
+                              )
+                            ) : (
+                              <>
+                                <a
+                                  className="chat-action-link"
+                                  onClick={async () => {
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: (
+                                        <span className="message-with-icon">
+                                          <MdPlayArrow size={16} className="msg-icon info" />
+                                          Replaying session...
+                                        </span>
+                                      )
+                                    }]);
+                                    const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
+                                    setMessages(prev => [...prev, {
+                                      role: 'system',
+                                      content: result.success ? (
+                                        <span className="message-with-icon">
+                                          <MdDone size={16} className="msg-icon success" />
+                                          Replay completed!
+                                        </span>
+                                      ) : (
+                                        <span className="message-with-icon">
+                                          <MdError size={16} className="msg-icon warning" />
+                                          Replay failed: {result.message}
+                                        </span>
+                                      )
+                                    }]);
+                                  }}
+                                >
+                                  <MdPlayArrow size={14} /> Replay Again
+                                </a>
+                                <span className="chat-action-separator">•</span>
+                                <a
+                                  className="chat-action-link secondary"
+                                  onClick={() => setRightPanelView('history')}
+                                >
+                                  <MdHistory size={14} /> View Details
+                                </a>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ) : msg.role === 'session-card' && (msg as any).sessionData ? (
                         <div className="mini-session-card">
                           <div className="mini-card-header">
                             <span className="mini-card-title">
