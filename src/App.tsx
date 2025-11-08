@@ -56,13 +56,13 @@ function App() {
   const [generatingSessionId, setGeneratingSessionId] = useState<string | null>(null);
   const [showContextModal, setShowContextModal] = useState(false);
   const [contextModalSession, setContextModalSession] = useState<any | null>(null);
-  const [contextForm, setContextForm] = useState({
-    validUsername: '',
-    validPassword: '',
-    validEmail: '',
-    invalidUsername: '',
-    invalidPassword: '',
-    invalidEmail: '',
+  const [contextForm, setContextForm] = useState<{
+    validData: { [key: string]: string };
+    invalidData: { [key: string]: string };
+    additionalContext: string;
+  }>({
+    validData: {},
+    invalidData: {},
     additionalContext: ''
   });
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -284,17 +284,29 @@ function App() {
       toggleChat();
     }
 
-    // Pre-fill form with detected field values and saved context
+    // Build dynamic form based on detected fields
     const formMetadata = session.formMetadata;
     const savedContext = session.testContext;
 
+    const validData: { [key: string]: string } = {};
+    const invalidData: { [key: string]: string } = {};
+
+    // For each detected field, create entries in valid/invalid data
+    if (formMetadata?.detectedFields) {
+      formMetadata.detectedFields.forEach((field: any) => {
+        const fieldKey = field.label || field.selector;
+
+        // Pre-fill valid data with recorded value or saved context
+        validData[fieldKey] = savedContext?.validData?.[fieldKey] || field.recordedValue || '';
+
+        // Pre-fill invalid data with saved context
+        invalidData[fieldKey] = savedContext?.invalidData?.[fieldKey] || '';
+      });
+    }
+
     const newForm = {
-      validUsername: savedContext?.validData?.username || formMetadata?.detectedFields?.find((f: any) => f.selector.includes('user'))?.recordedValue || '',
-      validPassword: savedContext?.validData?.password || formMetadata?.detectedFields?.find((f: any) => f.selector.includes('pass'))?.recordedValue || '',
-      validEmail: savedContext?.validData?.email || formMetadata?.detectedFields?.find((f: any) => f.selector.includes('email'))?.recordedValue || '',
-      invalidUsername: savedContext?.invalidData?.username || '',
-      invalidPassword: savedContext?.invalidData?.password || '',
-      invalidEmail: savedContext?.invalidData?.email || '',
+      validData,
+      invalidData,
       additionalContext: savedContext?.additionalContext || ''
     };
 
@@ -1022,73 +1034,57 @@ function App() {
                 </div>
               )}
 
-              {/* Valid Test Data Section */}
-              <div className="modal-section">
-                <label className="section-label">✅ Valid Test Data (for PASS tests)</label>
-                <div className="form-row">
-                  <div className="form-field">
-                    <label>Username</label>
-                    <input
-                      type="text"
-                      value={contextForm.validUsername}
-                      onChange={(e) => setContextForm({...contextForm, validUsername: e.target.value})}
-                      placeholder="e.g., student"
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label>Password</label>
-                    <input
-                      type="text"
-                      value={contextForm.validPassword}
-                      onChange={(e) => setContextForm({...contextForm, validPassword: e.target.value})}
-                      placeholder="e.g., Password123"
-                    />
+              {/* Valid Test Data Section - Dynamic */}
+              {contextModalSession.formMetadata && contextModalSession.formMetadata.detectedFields && contextModalSession.formMetadata.detectedFields.length > 0 && (
+                <div className="modal-section">
+                  <label className="section-label">✅ Valid Test Data (for PASS tests)</label>
+                  <div className="dynamic-fields">
+                    {contextModalSession.formMetadata.detectedFields.map((field: any, idx: number) => {
+                      const fieldKey = field.label || field.selector;
+                      return (
+                        <div key={idx} className="form-field">
+                          <label>{field.label} <span className="field-hint">({field.type})</span></label>
+                          <input
+                            type={field.type === 'password' ? 'text' : field.type}
+                            value={contextForm.validData[fieldKey] || ''}
+                            onChange={(e) => setContextForm({
+                              ...contextForm,
+                              validData: { ...contextForm.validData, [fieldKey]: e.target.value }
+                            })}
+                            placeholder={`Valid ${field.label.toLowerCase()}`}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="form-field">
-                  <label>Email (optional)</label>
-                  <input
-                    type="text"
-                    value={contextForm.validEmail}
-                    onChange={(e) => setContextForm({...contextForm, validEmail: e.target.value})}
-                    placeholder="e.g., user@example.com"
-                  />
-                </div>
-              </div>
+              )}
 
-              {/* Invalid Test Data Section */}
-              <div className="modal-section">
-                <label className="section-label">❌ Invalid Test Data (for FAIL tests)</label>
-                <div className="form-row">
-                  <div className="form-field">
-                    <label>Invalid Username</label>
-                    <input
-                      type="text"
-                      value={contextForm.invalidUsername}
-                      onChange={(e) => setContextForm({...contextForm, invalidUsername: e.target.value})}
-                      placeholder="e.g., wronguser"
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label>Invalid Password</label>
-                    <input
-                      type="text"
-                      value={contextForm.invalidPassword}
-                      onChange={(e) => setContextForm({...contextForm, invalidPassword: e.target.value})}
-                      placeholder="e.g., wrongpass"
-                    />
+              {/* Invalid Test Data Section - Dynamic */}
+              {contextModalSession.formMetadata && contextModalSession.formMetadata.detectedFields && contextModalSession.formMetadata.detectedFields.length > 0 && (
+                <div className="modal-section">
+                  <label className="section-label">❌ Invalid Test Data (for FAIL tests)</label>
+                  <div className="dynamic-fields">
+                    {contextModalSession.formMetadata.detectedFields.map((field: any, idx: number) => {
+                      const fieldKey = field.label || field.selector;
+                      return (
+                        <div key={idx} className="form-field">
+                          <label>Invalid {field.label} <span className="field-hint">({field.type})</span></label>
+                          <input
+                            type={field.type === 'password' ? 'text' : field.type}
+                            value={contextForm.invalidData[fieldKey] || ''}
+                            onChange={(e) => setContextForm({
+                              ...contextForm,
+                              invalidData: { ...contextForm.invalidData, [fieldKey]: e.target.value }
+                            })}
+                            placeholder={`Invalid ${field.label.toLowerCase()}`}
+                          />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="form-field">
-                  <label>Invalid Email (optional)</label>
-                  <input
-                    type="text"
-                    value={contextForm.invalidEmail}
-                    onChange={(e) => setContextForm({...contextForm, invalidEmail: e.target.value})}
-                    placeholder="e.g., invalid@"
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Additional Context Section */}
               <div className="modal-section">
@@ -1110,7 +1106,7 @@ function App() {
               <button
                 className="modal-btn generate"
                 onClick={handleGenerateWithContext}
-                disabled={!contextForm.validUsername && !contextForm.validPassword}
+                disabled={Object.keys(contextForm.validData).length === 0 || Object.values(contextForm.validData).every(v => !v)}
               >
                 <MdTableChart size={16} /> Generate Test Cases
               </button>

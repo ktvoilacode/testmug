@@ -564,16 +564,18 @@ CRITICAL:
       .map(a => `  - Field: "${a.selector}" | Type: ${a.inputType || 'text'}`)
       .join('\n');
 
-    // Build context data string
-    const validDataStr = `
-  Username: ${context.validUsername || '(not provided)'}
-  Password: ${context.validPassword || '(not provided)'}
-  Email: ${context.validEmail || '(not provided)'}`;
+    // Build context data string from dynamic validData/invalidData objects
+    const validDataStr = context.validData && Object.keys(context.validData).length > 0
+      ? Object.entries(context.validData)
+          .map(([key, value]) => `  ${key}: ${value || '(not provided)'}`)
+          .join('\n')
+      : '  (no valid data provided)';
 
-    const invalidDataStr = `
-  Username: ${context.invalidUsername || '(not provided)'}
-  Password: ${context.invalidPassword || '(not provided)'}
-  Email: ${context.invalidEmail || '(not provided)'}`;
+    const invalidDataStr = context.invalidData && Object.keys(context.invalidData).length > 0
+      ? Object.entries(context.invalidData)
+          .map(([key, value]) => `  ${key}: ${value || '(not provided)'}`)
+          .join('\n')
+      : '  (no invalid data provided)';
 
     const additionalContextStr = context.additionalContext || 'None provided';
 
@@ -595,9 +597,11 @@ ASSERTIONS TO VERIFY:
 ${assertionsSummary}
 
 USER-PROVIDED CONTEXT:
-Valid Credentials (for positive tests):${validDataStr}
+Valid Data (for positive tests):
+${validDataStr}
 
-Invalid Credentials (for negative tests):${invalidDataStr}
+Invalid Data (for negative tests):
+${invalidDataStr}
 
 Additional Context & Edge Cases:
 ${additionalContextStr}
@@ -605,27 +609,27 @@ ${additionalContextStr}
 GENERATE 8-12 TEST CASES WITH:
 ${flow.type === 'positive'
   ? `POSITIVE TEST SCENARIOS (should all PASS):
-  1. Happy path with valid credentials from context
+  1. Happy path with valid data from context
   2. Alternate valid data combinations
   3. Boundary values (min/max lengths, valid edge cases)
 
-  NOTE: Use the validUsername and validPassword provided by the user!
+  NOTE: Use the valid data provided by the user in the context above!
   NOTE: All these tests should succeed when executed!`
   : `NEGATIVE TEST SCENARIOS (should all FAIL/show errors):
-  1. Invalid credentials from context (invalidUsername, invalidPassword)
+  1. Invalid data from context (use the invalid values provided)
   2. Empty required fields (one at a time)
   3. Edge cases mentioned in additional context
   4. Boundary violations (too long, too short)
   5. Invalid formats and special characters
 
-  NOTE: Use the invalidUsername and invalidPassword provided by the user!
+  NOTE: Use the invalid data provided by the user in the context above!
   NOTE: Include edge cases from additional context!
   NOTE: All these tests should fail or show error messages when executed!`}
 
 CRITICAL:
 - Use the EXACT field selectors shown above
-- For POSITIVE flows, use valid credentials from context (validUsername, validPassword, validEmail)
-- For NEGATIVE flows, use invalid credentials from context (invalidUsername, invalidPassword, invalidEmail)
+- For POSITIVE flows, use the valid data from context (match field names to selectors)
+- For NEGATIVE flows, use the invalid data from context (match field names to selectors)
 - Include edge cases from additional context
 - For ${flow.type} flows, all tests should ${flow.type === 'positive' ? 'PASS' : 'FAIL'}`;
   }
@@ -646,28 +650,29 @@ CRITICAL:
     const testCases = [];
 
     if (flow.type === 'positive') {
-      // Positive flow test cases with user context
-      const validData = {
-        username: context.validUsername || 'testuser',
-        password: context.validPassword || 'TestPass123',
-        email: context.validEmail || 'test@example.com'
-      };
+      // Positive flow test cases with user context (generic)
+      const validData = context.validData || {};
 
       testCases.push({
         id: `TC${String(startId).padStart(3, '0')}`,
         flowId: flow.flowId,
         flowName: flow.name,
         type: flow.type,
-        name: `${flow.name} - Valid Credentials`,
-        description: 'Verify successful flow with valid credentials from context',
+        name: `${flow.name} - Valid Data`,
+        description: 'Verify successful flow with valid data from context',
         priority: 'High',
         testData: inputs.map(input => {
-          const selector = input.selector.toLowerCase();
-          let value = input.value;
+          // Try to find matching value from validData by selector or label
+          let value = input.value; // Default to recorded value
 
-          if (selector.includes('user')) value = validData.username;
-          else if (selector.includes('pass')) value = validData.password;
-          else if (selector.includes('email')) value = validData.email;
+          // Try to match by checking if any validData key appears in selector
+          for (const [key, val] of Object.entries(validData)) {
+            if (input.selector.toLowerCase().includes(key.toLowerCase()) ||
+                key.toLowerCase().includes(input.selector.toLowerCase().replace(/[#.\[\]]/g, ''))) {
+              value = val;
+              break;
+            }
+          }
 
           return {
             field: input.selector,
@@ -679,29 +684,29 @@ CRITICAL:
         status: 'Not Run'
       });
     } else {
-      // Negative flow test cases with user context
-      const invalidData = {
-        username: context.invalidUsername || 'wronguser',
-        password: context.invalidPassword || 'wrongpass',
-        email: context.invalidEmail || 'invalid@'
-      };
+      // Negative flow test cases with user context (generic)
+      const invalidData = context.invalidData || {};
 
       testCases.push({
         id: `TC${String(startId).padStart(3, '0')}`,
         flowId: flow.flowId,
         flowName: flow.name,
         type: flow.type,
-        name: `${flow.name} - Invalid Credentials`,
-        description: 'Verify error handling with invalid credentials from context',
+        name: `${flow.name} - Invalid Data`,
+        description: 'Verify error handling with invalid data from context',
         priority: 'High',
         testData: inputs.map(input => {
-          const selector = input.selector.toLowerCase();
-          let value = '';
+          // Try to find matching value from invalidData
+          let value = 'invalid_data'; // Default fallback
 
-          if (selector.includes('user')) value = invalidData.username;
-          else if (selector.includes('pass')) value = invalidData.password;
-          else if (selector.includes('email')) value = invalidData.email;
-          else value = 'invalid_data';
+          // Try to match by checking if any invalidData key appears in selector
+          for (const [key, val] of Object.entries(invalidData)) {
+            if (input.selector.toLowerCase().includes(key.toLowerCase()) ||
+                key.toLowerCase().includes(input.selector.toLowerCase().replace(/[#.\[\]]/g, ''))) {
+              value = val || 'invalid_data';
+              break;
+            }
+          }
 
           return {
             field: input.selector,
