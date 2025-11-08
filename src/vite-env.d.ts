@@ -5,6 +5,7 @@ interface Window {
     navigate: (url: string) => Promise<{ success: boolean; error?: string }>;
     getUrl: () => Promise<string>;
     sendMessage: (message: string) => Promise<{ role: 'assistant'; content: string }>;
+    toggleChat: (showChat: boolean) => Promise<{ success: boolean }>;
     startRecording: (type: 'positive' | 'negative' | 'edge') => Promise<{ success: boolean; message: string }>;
     stopRecording: () => Promise<{ success: boolean; actions: any[] }>;
   };

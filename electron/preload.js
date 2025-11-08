@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Chat/AI
   sendMessage: (message) => ipcRenderer.invoke('send-message', message),
+  toggleChat: (showChat) => ipcRenderer.invoke('toggle-chat', showChat),
 
   // Recording
   startRecording: (type) => ipcRenderer.invoke('start-recording', type),

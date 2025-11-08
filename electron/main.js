@@ -3,6 +3,7 @@ const path = require('path');
 
 let mainWindow;
 let browserView;
+let isChatVisible = true; // Track chat visibility state
 
 function createWindow() {
   // Create the main window
@@ -43,18 +44,22 @@ function createBrowserView() {
 
   mainWindow.setBrowserView(browserView);
 
-  // Position the browser view on the right side
+  // Position the browser view accounting for top bar (52px) and right panel (30%)
   const { width, height } = mainWindow.getBounds();
+  const topBarHeight = 52;
+  const rightPanelWidth = Math.floor(width * 0.3); // 30% for right chat panel
+
   browserView.setBounds({
-    x: Math.floor(width * 0.3), // 30% for left panel (chat)
-    y: 0,
-    width: Math.floor(width * 0.7), // 70% for browser view
-    height: height,
+    x: 0,
+    y: topBarHeight,
+    width: width - rightPanelWidth,
+    height: height - topBarHeight,
   });
 
+  // Don't use auto-resize since we're manually controlling it
   browserView.setAutoResize({
-    width: true,
-    height: true,
+    width: false,
+    height: false,
   });
 
   // Load a default page
@@ -68,11 +73,14 @@ app.on('ready', () => {
   mainWindow.on('resize', () => {
     if (browserView) {
       const { width, height } = mainWindow.getBounds();
+      const topBarHeight = 52;
+      const rightPanelWidth = isChatVisible ? Math.floor(width * 0.3) : 0; // Use chat visibility state
+
       browserView.setBounds({
-        x: Math.floor(width * 0.3),
-        y: 0,
-        width: Math.floor(width * 0.7),
-        height: height,
+        x: 0,
+        y: topBarHeight,
+        width: width - rightPanelWidth,
+        height: height - topBarHeight,
       });
     }
   });
@@ -94,9 +102,17 @@ app.on('activate', () => {
 ipcMain.handle('navigate', async (event, url) => {
   if (browserView) {
     try {
-      await browserView.webContents.loadURL(url);
-      return { success: true };
+      // Add https:// if no protocol specified
+      let fullUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        fullUrl = 'https://' + url;
+      }
+
+      console.log('Navigating to:', fullUrl);
+      await browserView.webContents.loadURL(fullUrl);
+      return { success: true, url: fullUrl };
     } catch (error) {
+      console.error('Navigation error:', error);
       return { success: false, error: error.message };
     }
   }
@@ -135,4 +151,35 @@ ipcMain.handle('stop-recording', async () => {
 
   // TODO: Implement stop recording logic
   return { success: true, actions: [] };
+});
+
+ipcMain.handle('toggle-chat', async (event, showChat) => {
+  console.log('Toggle chat called, showChat:', showChat);
+
+  // Update the global state
+  isChatVisible = showChat;
+
+  if (browserView && mainWindow) {
+    const { width, height } = mainWindow.getBounds();
+    const topBarHeight = 52;
+    const rightPanelWidth = isChatVisible ? Math.floor(width * 0.3) : 0;
+
+    console.log('Setting BrowserView bounds:', {
+      x: 0,
+      y: topBarHeight,
+      width: width - rightPanelWidth,
+      height: height - topBarHeight,
+    });
+
+    browserView.setBounds({
+      x: 0,
+      y: topBarHeight,
+      width: width - rightPanelWidth,
+      height: height - topBarHeight,
+    });
+
+    return { success: true };
+  }
+  console.log('BrowserView or mainWindow not available');
+  return { success: false };
 });
