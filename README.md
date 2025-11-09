@@ -2,7 +2,15 @@
 
 **AI Superpowers for Manual Testers: 10x Faster, 90% Less Effort**
 
-> Desktop-Native Application | [Demo Video](https://youtu.be/oXO3ZW489Zw)
+> **Note**: This is a desktop-native application with no live web URL. Watch the video below for a quick product overview, then visit my demo desk for a live walkthrough!
+
+---
+
+## Demo Video
+
+[![Testmug Demo](https://img.youtube.com/vi/oXO3ZW489Zw/maxresdefault.jpg)](https://youtu.be/oXO3ZW489Zw)
+
+**[▶️ Watch Full Demo on YouTube](https://youtu.be/oXO3ZW489Zw)**
 
 ---
 
