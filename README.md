@@ -1,36 +1,36 @@
 # Testmug
 
-**Superpowers for Manual Testers - AI-Powered Test Case Generation & Execution**
+**AI-Powered Test Case Generation & Execution for Manual Testers**
 
-> 🖥️ **Desktop-Native Application** | No live URL - Available for demo at the desk!
+> Desktop-Native Application | No live URL - Available for demo at the desk
 
 ---
 
-## 🎥 Demo Video
+## Demo Video
 
 [![Testmug Demo](https://img.youtube.com/vi/oXO3ZW489Zw/0.jpg)](https://youtu.be/oXO3ZW489Zw)
 
-**[Watch Full Demo →](https://youtu.be/oXO3ZW489Zw)**
+[Watch Full Demo](https://youtu.be/oXO3ZW489Zw)
 
 ---
 
-## 💡 The Problem
+## The Problem
 
-**Manual testers waste 90% of their time writing test cases instead of actually testing.**
+Manual testers waste 90% of their time writing test cases instead of actually testing.
 
-- Enterprises spend **$20-30B annually** on manual testing (56% of all testing spend)
+- Enterprises spend $20-30B annually on manual testing (56% of all testing spend)
 - Current automation tools require coding skills
-- **Nobody solved test design labor** - only execution speed
+- Nobody solved test design labor - only execution speed
 
-**Example**: Testing a login flow requires writing 50+ test cases covering positive, negative, and edge scenarios. This takes hours of repetitive documentation work.
+Example: Testing a login flow requires writing 50+ test cases covering positive, negative, and edge scenarios. This takes hours of repetitive documentation work.
 
 ---
 
-## ✨ Our Solution
+## Our Solution
 
-**Testmug = Record Once → AI Generates 50 Test Cases → Auto-Execute → Get Reports**
+**Testmug = Record Once → AI Generates Test Cases → Auto-Execute → Get Reports**
 
-A desktop application that lets manual testers (no coding required) generate comprehensive test suites from recorded user flows, reducing test creation time by **90%**.
+A desktop application that lets manual testers (no coding required) generate comprehensive test suites from recorded user flows, reducing test creation time by 90%.
 
 ### How It Works
 
@@ -46,61 +46,45 @@ Run all tests in parallel (5 min)
 Get Excel + Word reports with screenshots
 ```
 
-**Inspiration**: Lovable/Bolt.new proved "describe intent → AI builds it" works for non-coders. We apply this to test design.
+---
+
+## Current Features
+
+- Visual Recording - Click, type, navigate in embedded browser
+- AI Test Generation - GPT-4/Groq generates 10+ test cases with edge cases
+- Smart Execution - Playwright runs tests in parallel with self-healing selectors
+- Professional Reports - Excel with results + Word with screenshots
+- Chat Interface - Natural language commands ("run tests", "open report")
+- Flow Analysis - AI identifies reusable test flows
+- Session Management - Track, replay, and manage test sessions
 
 ---
 
-## 🚀 Current Features
+## Tech Stack
 
-✅ **Visual Recording** - Click, type, navigate in embedded browser
-✅ **AI Test Generation** - GPT-4/Groq generates 10+ test cases with edge cases
-✅ **Smart Execution** - Playwright runs tests in parallel with self-healing selectors
-✅ **Professional Reports** - Excel with results + Word with screenshots
-✅ **Chat Interface** - Natural language commands ("run tests", "open report")
-✅ **Flow Analysis** - AI identifies reusable test flows
-✅ **Session Management** - Track, replay, and manage test sessions
+**Frontend:** React 18 + TypeScript + Vite
+**Desktop:** Electron + BrowserView (embedded Chromium)
+**AI & Testing:** OpenAI GPT-4 / Groq API + Playwright
+**File Generation:** ExcelJS + docx
+**Storage:** Local file system + SQLite
 
 ---
 
-## 🛠️ Tech Stack
-
-**Frontend**
-- React 18 + TypeScript
-- Vite (fast build tool)
-
-**Desktop Framework**
-- Electron (cross-platform desktop app)
-- BrowserView (embedded Chromium for recording)
-
-**AI & Testing**
-- OpenAI GPT-4 / Groq API (test generation)
-- Playwright (test execution engine)
-
-**File Generation**
-- ExcelJS (Excel reports)
-- docx (Word reports with screenshots)
-
-**Storage**
-- Local file system (recordings, test cases, results)
-- SQLite-based session storage
-
----
-
-## 📦 Quick Start
+## Quick Start
 
 ```bash
-# 1. Clone repository
+# Clone repository
 git clone https://github.com/ktvoilacode/testmug.git
 cd testmug
 
-# 2. Install dependencies
+# Install dependencies
 npm install
 
-# 3. Set up API key
+# Set up API key
 cp .env.example .env
 # Add your GROQ_API_KEY or OPENAI_API_KEY
 
-# 4. Run
+# Run
 npm run dev
 ```
 
@@ -117,29 +101,29 @@ npm run dev
 
 ---
 
-## 🎯 Why Desktop-Native?
+## Why Desktop-Native?
 
-- ✅ No browser extension permissions needed
-- ✅ Full control over embedded browser
-- ✅ Native file system access (Excel, screenshots)
-- ✅ Works offline (after recordings)
-- ✅ No data leaves user's machine (privacy)
+- No browser extension permissions needed
+- Full control over embedded browser
+- Native file system access (Excel, screenshots)
+- Works offline (after recordings)
+- No data leaves user's machine (privacy)
 
-**Note**: This is a desktop application, not a web app. No live URL available - visit our demo desk to see it in action!
+Note: This is a desktop application, not a web app. No live URL available - visit our demo desk to see it in action.
 
 ---
 
-## 👤 Team
+## Team
 
 **Krishna Teja** - Solo Developer
 GitHub: [@ktvoilacode](https://github.com/ktvoilacode)
 
 ---
 
-## 📄 License
+## License
 
 MIT License - See LICENSE file for details
 
 ---
 
-**Built for Buildathon 2025 🚀**
+**Built for Buildathon 2025**
