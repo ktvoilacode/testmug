@@ -1,3 +1,10 @@
+/**
+ * Testmug - Main Electron Process
+ *
+ * Handles application initialization, window management, and IPC communication
+ * between the renderer process (React UI) and main process (Electron backend)
+ */
+
 const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
 const path = require('path');
 const Recorder = require('./recorder');
@@ -9,44 +16,66 @@ const TestCaseGenerator = require('./testcase-generator');
 const TestRunner = require('./test-runner');
 require('dotenv').config();
 
-// Import IPC handler modules
+// ============================================================================
+// IPC Handler Modules
+// ============================================================================
+
 const { registerNavigationHandlers } = require('./ipc/navigation-handlers');
 const { registerRecordingHandlers } = require('./ipc/recording-handlers');
 const { registerSessionHandlers } = require('./ipc/session-handlers');
 const { registerTestHandlers } = require('./ipc/test-handlers');
 const { registerChatHandlers } = require('./ipc/chat-handlers');
 
-let mainWindow;
-let browserView;
-let isChatVisible = true; // Track chat visibility state
-let recorder = null; // Recorder instance
-let sessionStorage = null; // Session storage instance
-let playwrightController = null; // Playwright controller instance
-let flowAnalyzer = null; // AI flow analyzer instance
-let testCaseGenerator = null; // AI test case generator instance
-let assertionManager = null; // Assertion manager for context menu
-let testRunner = null; // Test execution engine
-let currentSessionId = null; // Current recording session ID
-let ipcHandlersRegistered = false; // Track if IPC handlers are already registered
+// ============================================================================
+// Global State
+// ============================================================================
 
-// Enable remote debugging for Playwright connection BEFORE app starts
+let mainWindow;                     // Main application window
+let browserView;                    // Embedded browser for recording
+let isChatVisible = true;           // Chat panel visibility state
+let recorder = null;                // User action recording engine
+let sessionStorage = null;          // SQLite-based session persistence
+let playwrightController = null;    // Playwright test execution controller
+let flowAnalyzer = null;            // AI flow pattern analyzer
+let testCaseGenerator = null;       // AI test case generator
+let assertionManager = null;        // Assertion capture manager
+let testRunner = null;              // Parallel test execution engine
+let currentSessionId = null;        // Active recording session ID
+let ipcHandlersRegistered = false;  // Prevents duplicate IPC registration
+
+// ============================================================================
+// Electron Configuration
+// ============================================================================
+
+/**
+ * Enable remote debugging for Playwright connection
+ * Must be set BEFORE app starts
+ */
 if (!app.commandLine.hasSwitch('remote-debugging-port')) {
   app.commandLine.appendSwitch('remote-debugging-port', '9222');
 }
 
+// ============================================================================
+// Window Management
+// ============================================================================
+
+/**
+ * Creates the main application window and initializes all components
+ * Sets up React UI, embedded browser, recording engine, and AI services
+ */
 function createWindow() {
-  // Create the main window
+  // Create the main window with security settings
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
+      nodeIntegration: false,      // Security: Disable Node.js in renderer
+      contextIsolation: true,       // Security: Isolate preload scripts
       preload: path.join(__dirname, 'preload.js'),
     },
   });
 
-  // Load the React app
+  // Load the React app (development or production build)
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');

@@ -1,3 +1,10 @@
+/**
+ * Testmug - AI-Powered Test Case Generation for Manual Testers
+ *
+ * Main Application Component
+ * Handles UI, chat interface, session management, and test execution
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   MdChevronRight, MdChevronLeft, MdArrowBack, MdArrowForward, MdLock,
@@ -8,6 +15,18 @@ import {
 } from 'react-icons/md';
 import './App.css';
 
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
+/**
+ * Chat message interface supporting multiple message types
+ * - user: User input messages
+ * - assistant: AI responses
+ * - system: System notifications
+ * - session-card: Recorded session display cards
+ * - quick-actions: Action button groups (test/replay actions)
+ */
 interface Message {
   role: 'user' | 'assistant' | 'system' | 'session-card' | 'quick-actions';
   content: string | React.ReactNode;
@@ -15,6 +34,10 @@ interface Message {
   actionType?: 'test-actions' | 'replay-actions';
 }
 
+/**
+ * Recorded user action structure
+ * Captures user interactions during recording sessions
+ */
 interface RecordedAction {
   type: string;
   selector?: string;
@@ -23,6 +46,10 @@ interface RecordedAction {
   timestamp: number;
 }
 
+/**
+ * Detected test flow structure
+ * AI-identified patterns in recorded actions
+ */
 interface DetectedFlow {
   id: string;
   name: string;
@@ -31,6 +58,10 @@ interface DetectedFlow {
   startIndex: number;
   endIndex: number;
 }
+
+// ============================================================================
+// Main Application Component
+// ============================================================================
 
 function App() {
   const [messages, setMessages] = useState<Message[]>([

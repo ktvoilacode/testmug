@@ -1,7 +1,22 @@
+/**
+ * Testmug - Preload Script
+ *
+ * Securely exposes IPC methods to the renderer process (React app)
+ * Uses contextBridge to prevent direct access to Node.js/Electron APIs
+ *
+ * Security: contextIsolation enabled, no nodeIntegration
+ */
+
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
+// ============================================================================
+// Expose IPC Methods to Renderer
+// ============================================================================
+
+/**
+ * Exposes safe API methods to window.electron in the renderer process
+ * All methods use ipcRenderer.invoke for async main process communication
+ */
 contextBridge.exposeInMainWorld('electron', {
   // Browser navigation
   navigate: (url) => ipcRenderer.invoke('navigate', url),
