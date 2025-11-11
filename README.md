@@ -47,15 +47,66 @@ Record happy path (2 min) → AI generates tests (1 min) → Edit Excel (optiona
 
 ## Setup & Run
 
+### Development Mode
+
 ```bash
 git clone https://github.com/ktvoilacode/testmug.git
 cd testmug
 npm install
-cp .env.example .env  # Add GROQ_API_KEY or OPENAI_API_KEY
 npm run dev
 ```
 
-**Usage:** Launch app → Enter URL → Record actions → Generate tests → Review Excel → Run tests → View reports
+**Initial Setup:**
+1. Launch the app (opens at http://localhost:5173)
+2. Go to **Settings** tab (right panel)
+3. Select LLM provider (Groq/OpenAI/Mistral/Grok)
+4. Enter your API key
+5. Click "Save Settings"
+
+**Optional - Test Context:**
+1. Go to **Context** tab
+2. Add test generation context (credentials, scenarios, etc.)
+3. Click "Save Context"
+
+**Settings Location:**
+- All settings are stored in `~/.testmug/settings.json`
+- Persists across app restarts
+- Includes: LLM provider, API key, test context
+
+### Production Build
+
+**Build for All Platforms (from macOS):**
+```bash
+# Install Wine (required for Windows builds on macOS)
+brew install --cask wine-stable
+
+# Build for all platforms at once
+npm run electron:build:all
+
+# Or build individually:
+npm run electron:build:mac    # macOS only
+npm run electron:build:win    # Windows only (requires Wine on macOS)
+npm run electron:build:linux  # Linux only
+```
+
+**Build on Windows:**
+```bash
+# Clone and build on Windows machine
+git clone https://github.com/ktvoilacode/testmug.git
+cd testmug
+npm install
+npm run electron:build:win
+
+# Requires: Node.js, Python, Visual Studio Build Tools
+```
+
+**Output Files:**
+- **macOS**: `release/Testmug.dmg`
+- **Windows**: `release/Testmug-portable.exe` (no installation)
+- **Windows**: `release/Testmug-win.zip` (extract and run)
+- **Linux**: `release/Testmug.AppImage`
+
+**Usage:** Launch app → Configure settings → Enter URL → Record actions → Generate tests → Review Excel → Run tests → View reports
 
 Note: Desktop app only—visit demo desk for live demonstration.
 
@@ -63,9 +114,19 @@ Note: Desktop app only—visit demo desk for live demonstration.
 
 ## Models & Data
 
-**AI Models:** OpenAI GPT-4 / Groq API (test generation with fallback to template-based generation)
+**AI Models:**
+- Groq (llama-3.1-8b-instant) - Free tier
+- OpenAI (gpt-4o-mini)
+- Mistral (mistral-small-latest)
+- Grok (grok-beta)
 
-**Data Sources:** DOM structure and user actions (local storage), AI-generated test scenarios (Excel), execution results with screenshots (local files)
+Configured via Settings tab with fallback to template-based generation
+
+**Data Sources:**
+- DOM structure and user actions (local storage in `~/.testmug/`)
+- AI-generated test scenarios (Excel files)
+- Execution results with screenshots (local files)
+- Settings & context stored in `~/.testmug/settings.json`
 
 **Licenses:** MIT (Testmug, Electron, React, Playwright, ExcelJS, docx)
 

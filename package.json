@@ -12,7 +12,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
-    "package": "electron-builder"
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:win": "npm run build && electron-builder --win",
+    "electron:build:linux": "npm run build && electron-builder --linux",
+    "electron:build:all": "npm run build && electron-builder --mac --win --linux",
+    "package": "electron-builder",
+    "postinstall": "playwright install chromium"
   },
   "dependencies": {
     "dotenv": "^17.2.3",
@@ -38,21 +44,43 @@
   "build": {
     "appId": "com.testmug.app",
     "productName": "Testmug",
-    "directories": {
-      "output": "release"
-    },
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "package.json"
+      "testmug.png",
+      "testmug_icon.png",
+      "testmug_logo.png",
+      "node_modules/**/*"
     ],
+    "asarUnpack": [
+      "node_modules/playwright/**/*",
+      "node_modules/@playwright/**/*",
+      "node_modules/playwright-core/**/*"
+    ],
+    "afterPack": "./scripts/after-pack.js",
+    "directories": {
+      "output": "release"
+    },
     "mac": {
-      "target": "dmg",
-      "icon": "build/icon.icns"
+      "icon": "testmug.png",
+      "target": "dmg"
     },
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "testmug.png",
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "linux": {
+      "icon": "testmug.png",
+      "target": "AppImage"
     }
   }
 }
