@@ -11,7 +11,8 @@ import {
   MdRefresh, MdClose, MdHistory, MdDelete, MdPlayArrow,
   MdTableChart, MdLink, MdCalendarToday, MdCode, MdTimer, MdCheckCircle,
   MdLoop, MdFiberManualRecord, MdCheckCircleOutline, MdWarning,
-  MdSmartToy, MdAssessment, MdStars, MdCelebration, MdError, MdDone
+  MdSmartToy, MdAssessment, MdStars, MdCelebration, MdError, MdDone,
+  MdSettings, MdSave, MdDescription
 } from 'react-icons/md';
 import './App.css';
 
@@ -79,7 +80,7 @@ function App() {
   const [isSecure, setIsSecure] = useState(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [canGoForward, setCanGoForward] = useState(false);
-  const [rightPanelView, setRightPanelView] = useState<'chat' | 'history'>('chat');
+  const [rightPanelView, setRightPanelView] = useState<'chat' | 'history' | 'settings' | 'context'>('chat');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingSessionName, setEditingSessionName] = useState('');
   const [testProgress, setTestProgress] = useState<{total: number, completed: number, passed: number, failed: number} | null>(null);
@@ -90,6 +91,10 @@ function App() {
   const [urlHistory, setUrlHistory] = useState<string[]>([]);
   const [urlSuggestion, setUrlSuggestion] = useState('');
   const [lastAssertionDesc, setLastAssertionDesc] = useState<string>('');
+  const [llmProvider, setLlmProvider] = useState<string>('groq');
+  const [llmApiKey, setLlmApiKey] = useState<string>('');
+  const [testContext, setTestContext] = useState<string>('');
+  const [settingsSaved, setSettingsSaved] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
@@ -155,6 +160,35 @@ function App() {
       setCanGoBack(data.canGoBack);
       setCanGoForward(data.canGoForward);
     });
+  }, []);
+
+  // Load settings and context on mount
+  useEffect(() => {
+    const loadSettingsAndContext = async () => {
+      try {
+        const settings = await window.electron.getSettings();
+
+        // Load LLM settings
+        if (settings?.llm) {
+          setLlmProvider(settings.llm.provider || 'groq');
+          // Show preview if API key exists (don't set the actual key for security)
+          if (settings.llm.apiKeyPreview) {
+            setLlmApiKey(settings.llm.apiKeyPreview);
+          }
+          console.log('[App] Loaded LLM provider:', settings.llm.provider, '| Has API key:', settings.llm.hasApiKey);
+        }
+
+        // Load test context
+        if (settings?.testContext) {
+          setTestContext(settings.testContext);
+          console.log('[App] Loaded test context:', settings.testContext.length, 'characters');
+        }
+      } catch (error) {
+        console.error('[App] Error loading settings:', error);
+      }
+    };
+
+    loadSettingsAndContext();
   }, []);
 
   // Load URL history from localStorage on mount
@@ -607,12 +641,53 @@ function App() {
       } else {
         setMessages(prev => [...prev, {
           role: 'system',
-          content: (
-            <span className="message-with-icon">
-              <MdError size={16} className="msg-icon warning" />
-              Test execution failed: {result.message}
-            </span>
-          )
+          content: formatActionError(result.message || 'Unknown error', 'Test Execution', async () => {
+            // Retry test execution
+            setRunningTestSessionId(sessionId);
+            setTestProgress({
+              total: recentSessionWithTests.testCaseMetadata.testCaseCount,
+              completed: 0,
+              passed: 0,
+              failed: 0
+            });
+            setMessages(prev => [...prev, {
+              role: 'system',
+              content: (
+                <span className="message-with-icon">
+                  <MdLoop size={16} className="msg-icon info" />
+                  Retrying test execution...
+                </span>
+              )
+            }]);
+            const retryResult = await window.electron.runAllTests(sessionId);
+            setTestProgress(null);
+            setRunningTestSessionId(null);
+            if (retryResult.success) {
+              setCompletedTestSessions(prev => ({
+                ...prev,
+                [sessionId]: {
+                  passed: retryResult.passed,
+                  failed: retryResult.failed,
+                  total: retryResult.total,
+                  reportPath: retryResult.reportPath
+                }
+              }));
+              setMessages(prev => [...prev, {
+                role: 'system',
+                content: (
+                  <span className="message-with-icon">
+                    <MdDone size={16} className="msg-icon success" />
+                    Tests completed: {retryResult.passed}/{retryResult.total} passed ({retryResult.failed} failed)
+                  </span>
+                )
+              }]);
+            } else {
+              setMessages(prev => [...prev, {
+                role: 'system',
+                content: formatActionError(retryResult.message || 'Unknown error', 'Test Execution')
+              }]);
+            }
+          })
         }]);
       }
 
@@ -659,12 +734,28 @@ function App() {
             <MdDone size={16} className="msg-icon success" />
             Replay completed!
           </span>
-        ) : (
-          <span className="message-with-icon">
-            <MdError size={16} className="msg-icon warning" />
-            Replay failed: {result.message}
-          </span>
-        )
+        ) : formatActionError(result.message || 'Unknown error', 'Replay', async () => {
+          // Retry logic
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: (
+              <span className="message-with-icon">
+                <MdLoop size={16} className="msg-icon info" />
+                Retrying replay...
+              </span>
+            )
+          }]);
+          const retryResult = await window.electron.replaySession(recentSession.id, 'normal');
+          setMessages(prev => [...prev, {
+            role: 'system',
+            content: retryResult.success ? (
+              <span className="message-with-icon">
+                <MdDone size={16} className="msg-icon success" />
+                Replay completed!
+              </span>
+            ) : formatActionError(retryResult.message || 'Unknown error', 'Replay')
+          }]);
+        })
       }]);
 
       // Add quick action buttons
@@ -780,6 +871,48 @@ function App() {
     }
   };
 
+  // Generic error formatter for all actions (replay, test, generation, etc.)
+  const formatActionError = (error: string, actionName: string, onRetry?: () => void) => {
+    // Extract URL if present
+    const urlMatch = error.match(/(https?:\/\/[^\s]+)/);
+    const url = urlMatch ? urlMatch[1] : null;
+
+    // Clean up the error message
+    let cleanError = error
+      .replace(/page\.\w+:\s*/g, '') // Remove "page.goto:" prefix
+      .replace(/Call log:[\s\S]*$/, '') // Remove call log details
+      .replace(/Error:\s*/g, '') // Remove "Error:" prefix
+      .replace(/TimeoutError:\s*/g, '') // Remove timeout prefix
+      .trim();
+
+    // Shorten very long errors
+    if (cleanError.length > 200) {
+      cleanError = cleanError.substring(0, 200) + '...';
+    }
+
+    return (
+      <div className="error-message-container">
+        <div className="error-header">
+          <MdError size={18} className="msg-icon warning" />
+          <strong>{actionName} Failed</strong>
+        </div>
+        <div className="error-details">
+          <div className="error-text">{cleanError}</div>
+          {url && (
+            <div className="error-url">
+              <strong>URL:</strong> <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
+            </div>
+          )}
+        </div>
+        {onRetry && (
+          <button className="retry-button" onClick={onRetry}>
+            <MdLoop size={14} /> Retry {actionName}
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const loadSessions = async () => {
     try {
       const result = await window.electron.getSessions();
@@ -791,7 +924,7 @@ function App() {
     }
   };
 
-  // Auto-generate test cases without context modal (simplified for MVP)
+  // Auto-generate test cases with optional context
   const handleGenerateTestCases = async (session: any) => {
     // Start generation with progress
     setGeneratingSessionId(session.id);
@@ -806,19 +939,44 @@ function App() {
       content: (
         <span className="message-with-icon">
           <MdSmartToy size={16} className="msg-icon info" />
-          Generating test cases automatically...
+          Generating test cases{testContext ? ' with your context' : ' automatically'}...
         </span>
       )
     }]);
 
-    // Auto-generate with minimal context (empty object)
+    // Use user-provided context if available, otherwise use empty context
+    const context = testContext
+      ? { additionalContext: testContext }
+      : { validData: {}, invalidData: {}, additionalContext: '' };
+
     const result = await window.electron.generateTestCasesWithContext(
       session.id,
-      { validData: {}, invalidData: {}, additionalContext: '' }
+      context
     );
 
     setGenerationProgress(null);
     setGeneratingSessionId(null);
+
+    // Check if API key is missing
+    if (!result.success && result.needsApiKey) {
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: (
+          <span className="message-with-icon">
+            <MdWarning size={16} className="msg-icon warning" />
+            {result.message}
+            <button
+              className="inline-link-button"
+              onClick={() => setRightPanelView('settings')}
+              style={{ marginLeft: '8px', textDecoration: 'underline', cursor: 'pointer', background: 'none', border: 'none', color: 'inherit', fontSize: 'inherit' }}
+            >
+              Open Settings →
+            </button>
+          </span>
+        )
+      }]);
+      return;
+    }
 
     setMessages(prev => [...prev, {
       role: 'system',
@@ -829,12 +987,44 @@ function App() {
               Success! Generated {result.testCaseCount} test case{result.testCaseCount === 1 ? '' : 's'}. Open Excel to view and customize.
             </span>
           )
-        : (
-            <span className="message-with-icon">
-              <MdWarning size={16} className="msg-icon warning" />
-              Generation failed: {result.message}
-            </span>
-          )
+        : formatActionError(result.message || 'Unknown error', 'Test Generation', async () => {
+            // Retry generation
+            setGeneratingSessionId(session.id);
+            setGenerationProgress({
+              total: session.flowAnalysis?.flowCount || 1,
+              completed: 0,
+              current: 'Retrying generation...'
+            });
+            setMessages(prev => [...prev, {
+              role: 'system',
+              content: (
+                <span className="message-with-icon">
+                  <MdLoop size={16} className="msg-icon info" />
+                  Retrying test generation...
+                </span>
+              )
+            }]);
+            const context = testContext
+              ? { additionalContext: testContext }
+              : { validData: {}, invalidData: {}, additionalContext: '' };
+            const retryResult = await window.electron.generateTestCasesWithContext(session.id, context);
+            setGenerationProgress(null);
+            setGeneratingSessionId(null);
+            setMessages(prev => [...prev, {
+              role: 'system',
+              content: retryResult.success
+                ? (
+                    <span className="message-with-icon">
+                      <MdAssessment size={16} className="msg-icon success" />
+                      Success! Generated {retryResult.testCaseCount} test case{retryResult.testCaseCount === 1 ? '' : 's'}.
+                    </span>
+                  )
+                : formatActionError(retryResult.message || 'Unknown error', 'Test Generation')
+            }]);
+            if (retryResult.success) {
+              loadSessions();
+            }
+          })
     }]);
 
     if (result.success) {
@@ -1082,10 +1272,22 @@ function App() {
                 Chat
               </button>
               <button
+                className={`panel-tab ${rightPanelView === 'context' ? 'active' : ''}`}
+                onClick={() => setRightPanelView('context')}
+              >
+                <MdDescription size={14} /> Context
+              </button>
+              <button
                 className={`panel-tab ${rightPanelView === 'history' ? 'active' : ''}`}
                 onClick={() => setRightPanelView('history')}
               >
                 History
+              </button>
+              <button
+                className={`panel-tab ${rightPanelView === 'settings' ? 'active' : ''}`}
+                onClick={() => setRightPanelView('settings')}
+              >
+                <MdSettings size={14} /> Settings
               </button>
             </div>
 
@@ -1243,7 +1445,8 @@ function App() {
                                         </span>
                                       )
                                     }]);
-                                    const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
+                                    const sessionId = (msg as any).sessionData.id;
+                                    const result = await window.electron.replaySession(sessionId, 'normal');
                                     setMessages(prev => [...prev, {
                                       role: 'system',
                                       content: result.success ? (
@@ -1251,12 +1454,27 @@ function App() {
                                           <MdDone size={16} className="msg-icon success" />
                                           Replay completed!
                                         </span>
-                                      ) : (
-                                        <span className="message-with-icon">
-                                          <MdError size={16} className="msg-icon warning" />
-                                          Replay failed: {result.message}
-                                        </span>
-                                      )
+                                      ) : formatActionError(result.message || 'Unknown error', 'Replay', async () => {
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: (
+                                            <span className="message-with-icon">
+                                              <MdLoop size={16} className="msg-icon info" />
+                                              Retrying replay...
+                                            </span>
+                                          )
+                                        }]);
+                                        const retryResult = await window.electron.replaySession(sessionId, 'normal');
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: retryResult.success ? (
+                                            <span className="message-with-icon">
+                                              <MdDone size={16} className="msg-icon success" />
+                                              Replay completed!
+                                            </span>
+                                          ) : formatActionError(retryResult.message || 'Unknown error', 'Replay')
+                                        }]);
+                                      })
                                     }]);
                                   }}
                                 >
@@ -1311,7 +1529,8 @@ function App() {
                                       </span>
                                     )
                                   }]);
-                                  const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
+                                  const sessionId = (msg as any).sessionData.id;
+                                  const result = await window.electron.replaySession(sessionId, 'normal');
                                   setMessages(prev => [...prev, {
                                     role: 'system',
                                     content: result.success ? (
@@ -1319,12 +1538,27 @@ function App() {
                                         <MdDone size={16} className="msg-icon success" />
                                         Replay completed!
                                       </span>
-                                    ) : (
-                                      <span className="message-with-icon">
-                                        <MdError size={16} className="msg-icon warning" />
-                                        Replay failed: {result.message}
-                                      </span>
-                                    )
+                                    ) : formatActionError(result.message || 'Unknown error', 'Replay', async () => {
+                                      setMessages(prev => [...prev, {
+                                        role: 'system',
+                                        content: (
+                                          <span className="message-with-icon">
+                                            <MdLoop size={16} className="msg-icon info" />
+                                            Retrying replay...
+                                          </span>
+                                        )
+                                      }]);
+                                      const retryResult = await window.electron.replaySession(sessionId, 'normal');
+                                      setMessages(prev => [...prev, {
+                                        role: 'system',
+                                        content: retryResult.success ? (
+                                          <span className="message-with-icon">
+                                            <MdDone size={16} className="msg-icon success" />
+                                            Replay completed!
+                                          </span>
+                                        ) : formatActionError(retryResult.message || 'Unknown error', 'Replay')
+                                      }]);
+                                    })
                                   }]);
                                 }}
                                 title="Replay session"
@@ -1422,7 +1656,8 @@ function App() {
                                         </span>
                                       )
                                     }]);
-                                    const result = await window.electron.replaySession((msg as any).sessionData.id, 'normal');
+                                    const sessionId = (msg as any).sessionData.id;
+                                    const result = await window.electron.replaySession(sessionId, 'normal');
                                     setMessages(prev => [...prev, {
                                       role: 'system',
                                       content: result.success ? (
@@ -1430,12 +1665,27 @@ function App() {
                                           <MdDone size={16} className="msg-icon success" />
                                           Replay completed!
                                         </span>
-                                      ) : (
-                                        <span className="message-with-icon">
-                                          <MdError size={16} className="msg-icon warning" />
-                                          Replay failed: {result.message}
-                                        </span>
-                                      )
+                                      ) : formatActionError(result.message || 'Unknown error', 'Replay', async () => {
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: (
+                                            <span className="message-with-icon">
+                                              <MdLoop size={16} className="msg-icon info" />
+                                              Retrying replay...
+                                            </span>
+                                          )
+                                        }]);
+                                        const retryResult = await window.electron.replaySession(sessionId, 'normal');
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: retryResult.success ? (
+                                            <span className="message-with-icon">
+                                              <MdDone size={16} className="msg-icon success" />
+                                              Replay completed!
+                                            </span>
+                                          ) : formatActionError(retryResult.message || 'Unknown error', 'Replay')
+                                        }]);
+                                      })
                                     }]);
                                   }}
                                   title="Replay session"
@@ -1729,12 +1979,27 @@ function App() {
                                           <MdDone size={16} className="msg-icon success" />
                                           Replay completed!
                                         </span>
-                                      ) : (
-                                        <span className="message-with-icon">
-                                          <MdError size={16} className="msg-icon warning" />
-                                          Replay failed: {result.message}
-                                        </span>
-                                      )
+                                      ) : formatActionError(result.message || 'Unknown error', 'Replay', async () => {
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: (
+                                            <span className="message-with-icon">
+                                              <MdLoop size={16} className="msg-icon info" />
+                                              Retrying full session replay...
+                                            </span>
+                                          )
+                                        }]);
+                                        const retryResult = await window.electron.replaySession(session.id, 'normal');
+                                        setMessages(prev => [...prev, {
+                                          role: 'system',
+                                          content: retryResult.success ? (
+                                            <span className="message-with-icon">
+                                              <MdDone size={16} className="msg-icon success" />
+                                              Replay completed!
+                                            </span>
+                                          ) : formatActionError(retryResult.message || 'Unknown error', 'Replay')
+                                        }]);
+                                      })
                                     }]);
                                   }}
                                   title="Replay entire session"
@@ -1763,12 +2028,27 @@ function App() {
                                             <MdDone size={16} className="msg-icon success" />
                                             {flow.name} completed!
                                           </span>
-                                        ) : (
-                                          <span className="message-with-icon">
-                                            <MdError size={16} className="msg-icon warning" />
-                                            Replay failed: {result.message}
-                                          </span>
-                                        )
+                                        ) : formatActionError(result.message || 'Unknown error', 'Replay', async () => {
+                                          setMessages(prev => [...prev, {
+                                            role: 'system',
+                                            content: (
+                                              <span className="message-with-icon">
+                                                <MdLoop size={16} className="msg-icon info" />
+                                                Retrying {flow.name} replay...
+                                              </span>
+                                            )
+                                          }]);
+                                          const retryResult = await window.electron.replayFlow(session.id, flow.flowId);
+                                          setMessages(prev => [...prev, {
+                                            role: 'system',
+                                            content: retryResult.success ? (
+                                              <span className="message-with-icon">
+                                                <MdDone size={16} className="msg-icon success" />
+                                                {flow.name} completed!
+                                              </span>
+                                            ) : formatActionError(retryResult.message || 'Unknown error', 'Replay')
+                                          }]);
+                                        })
                                       }]);
                                     }}
                                     title={`Replay ${flow.name} (${flow.type})`}
@@ -1903,12 +2183,39 @@ function App() {
                                               Tests completed: {result.passed}/{result.total} passed ({result.failed} failed)
                                             </span>
                                           )
-                                        : (
-                                            <span className="message-with-icon">
-                                              <MdError size={16} className="msg-icon warning" />
-                                              Test execution failed: {result.message}
-                                            </span>
-                                          )
+                                        : formatActionError(result.message || 'Unknown error', 'Test Execution', async () => {
+                                            // Retry test execution
+                                            setRunningTestSessionId(session.id);
+                                            setTestProgress({
+                                              total: session.testCaseMetadata.testCaseCount,
+                                              completed: 0,
+                                              passed: 0,
+                                              failed: 0
+                                            });
+                                            setMessages(prev => [...prev, {
+                                              role: 'system',
+                                              content: (
+                                                <span className="message-with-icon">
+                                                  <MdLoop size={16} className="msg-icon info" />
+                                                  Retrying test execution...
+                                                </span>
+                                              )
+                                            }]);
+                                            const retryResult = await window.electron.runAllTests(session.id);
+                                            setTestProgress(null);
+                                            setRunningTestSessionId(null);
+                                            setMessages(prev => [...prev, {
+                                              role: 'system',
+                                              content: retryResult.success
+                                                ? (
+                                                    <span className="message-with-icon">
+                                                      <MdDone size={16} className="msg-icon success" />
+                                                      Tests completed: {retryResult.passed}/{retryResult.total} passed ({retryResult.failed} failed)
+                                                    </span>
+                                                  )
+                                                : formatActionError(retryResult.message || 'Unknown error', 'Test Execution')
+                                            }]);
+                                          })
                                     }]);
                                   }}
                                   title="Run all test cases in parallel"
@@ -1922,6 +2229,150 @@ function App() {
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Context View */}
+            {rightPanelView === 'context' && (
+              <div className="settings-view">
+                <div className="settings-header">
+                  <h3><MdDescription size={18} /> Test Generation Context</h3>
+                  <p className="settings-description">
+                    Provide additional context to help AI generate better test cases.
+                    This is optional but recommended for more accurate test data.
+                  </p>
+                </div>
+
+                <div className="settings-content">
+                  <div className="form-group">
+                    <label>Additional Context (Optional)</label>
+                    <textarea
+                      className="context-textarea"
+                      value={testContext}
+                      onChange={(e) => setTestContext(e.target.value)}
+                      placeholder="Example:&#10;- Valid username: admin@example.com&#10;- Valid password: Test123!&#10;- Invalid usernames to test: user@invalid, test, @example.com&#10;- Edge cases: empty fields, special characters&#10;- Expected behavior: redirect to dashboard on success"
+                      rows={12}
+                    />
+                    <small className="help-text">
+                      Provide sample valid/invalid data, edge cases, expected behaviors, etc.
+                      The AI will use this to generate more realistic and comprehensive test cases.
+                    </small>
+                  </div>
+
+                  <div className="info-box">
+                    <MdSmartToy size={16} />
+                    <div>
+                      <strong>How it helps:</strong>
+                      <ul>
+                        <li>Generate realistic test data instead of random values</li>
+                        <li>Cover specific edge cases you care about</li>
+                        <li>Match your application's validation rules</li>
+                        <li>Create more meaningful test scenarios</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <button
+                    className="save-button"
+                    onClick={async () => {
+                      try {
+                        await window.electron.saveTestContext(testContext);
+                        setMessages(prev => [...prev, {
+                          role: 'system',
+                          content: (
+                            <span className="message-with-icon">
+                              <MdCheckCircle size={16} className="msg-icon success" />
+                              Context saved to ~/.testmug/settings.json! It will persist across app restarts.
+                            </span>
+                          )
+                        }]);
+                        setRightPanelView('chat');
+                      } catch (error) {
+                        console.error('Error saving context:', error);
+                        setMessages(prev => [...prev, {
+                          role: 'system',
+                          content: 'Failed to save context. Please try again.'
+                        }]);
+                      }
+                    }}
+                  >
+                    <MdSave size={16} /> Save Context
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Settings View */}
+            {rightPanelView === 'settings' && (
+              <div className="settings-view">
+                <div className="settings-header">
+                  <h3><MdSettings size={18} /> Settings</h3>
+                  <p className="settings-description">
+                    Configure your LLM provider and API key for AI-powered test generation.
+                  </p>
+                </div>
+
+                <div className="settings-content">
+                  <div className="form-group">
+                    <label>LLM Provider</label>
+                    <select
+                      className="form-select"
+                      value={llmProvider}
+                      onChange={(e) => setLlmProvider(e.target.value)}
+                    >
+                      <option value="groq">Groq (llama-3.1-8b-instant) - Free</option>
+                      <option value="openai">OpenAI (gpt-4o-mini)</option>
+                      <option value="mistral">Mistral (mistral-small-latest)</option>
+                      <option value="grok">Grok (grok-beta)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>API Key</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      value={llmApiKey}
+                      onChange={(e) => setLlmApiKey(e.target.value)}
+                      placeholder="Enter your API key"
+                    />
+                    <small className="help-text">
+                      {llmProvider === 'groq' && 'Get your free API key from https://console.groq.com'}
+                      {llmProvider === 'openai' && 'Get your API key from https://platform.openai.com/api-keys'}
+                      {llmProvider === 'mistral' && 'Get your API key from https://console.mistral.ai'}
+                      {llmProvider === 'grok' && 'Get your API key from https://x.ai'}
+                    </small>
+                  </div>
+
+                  {settingsSaved && (
+                    <div className="success-message">
+                      <MdCheckCircle size={16} /> Settings saved successfully!
+                    </div>
+                  )}
+
+                  <button
+                    className="save-button"
+                    onClick={async () => {
+                      try {
+                        await window.electron.updateLLMSettings(llmProvider, llmApiKey);
+                        setSettingsSaved(true);
+                        setTimeout(() => setSettingsSaved(false), 3000);
+                        setMessages(prev => [...prev, {
+                          role: 'system',
+                          content: `LLM settings updated: ${llmProvider}. You can now generate test cases!`
+                        }]);
+                      } catch (error) {
+                        console.error('Error saving settings:', error);
+                        setMessages(prev => [...prev, {
+                          role: 'system',
+                          content: 'Failed to save settings. Please try again.'
+                        }]);
+                      }
+                    }}
+                  >
+                    <MdSave size={16} /> Save Settings
+                  </button>
                 </div>
               </div>
             )}

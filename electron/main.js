@@ -9,6 +9,7 @@ const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
 const path = require('path');
 const Recorder = require('./recorder');
 const SessionStorage = require('./session-storage');
+const SettingsStorage = require('./settings-storage');
 const PlaywrightController = require('./playwright-controller');
 const FlowAnalyzer = require('./flow-analyzer');
 const AssertionManager = require('./assertion-manager');
@@ -25,6 +26,7 @@ const { registerRecordingHandlers } = require('./ipc/recording-handlers');
 const { registerSessionHandlers } = require('./ipc/session-handlers');
 const { registerTestHandlers } = require('./ipc/test-handlers');
 const { registerChatHandlers } = require('./ipc/chat-handlers');
+const { registerSettingsHandlers } = require('./ipc/settings-handlers');
 
 // ============================================================================
 // Global State
@@ -94,15 +96,26 @@ function createWindow() {
   assertionManager = new AssertionManager(browserView);
   testRunner = new TestRunner(playwrightController, sessionStorage);
 
-  // Initialize AI flow analyzer and test case generator (use GROQ_API_KEY from .env)
-  const apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
-  const provider = process.env.GROQ_API_KEY ? 'groq' : 'openai';
+  // Initialize AI flow analyzer and test case generator
+  // First try to load from settings, then fall back to environment variables
+  const settingsStorage = new SettingsStorage();
+  const llmSettings = settingsStorage.getLLMSettings();
+
+  let apiKey = llmSettings.apiKey;
+  let provider = llmSettings.provider;
+
+  // Fallback to environment variables if no settings configured
+  if (!apiKey) {
+    apiKey = process.env.GROQ_API_KEY || process.env.OPENAI_API_KEY;
+    provider = process.env.GROQ_API_KEY ? 'groq' : 'openai';
+  }
+
   if (apiKey) {
     flowAnalyzer = new FlowAnalyzer(apiKey, provider);
     testCaseGenerator = new TestCaseGenerator(apiKey, provider);
     console.log(`[AI] Initialized FlowAnalyzer and TestCaseGenerator with ${provider}`);
   } else {
-    console.warn('[AI] No API key found - AI features disabled');
+    console.warn('[AI] No API key found - AI features will require configuration in Settings');
   }
 
   // Register all IPC handlers after initialization
@@ -297,6 +310,17 @@ function registerIPCHandlers() {
     mainWindow,
     getChatVisibility: () => isChatVisible,
     setChatVisibility: (visible) => { isChatVisible = visible; }
+  });
+
+  // Settings handlers with AI reinitialization callback
+  registerSettingsHandlers({
+    reinitializeAI: (apiKey, provider) => {
+      const FlowAnalyzer = require('./flow-analyzer');
+      const TestCaseGenerator = require('./testcase-generator');
+      flowAnalyzer = new FlowAnalyzer(apiKey, provider);
+      testCaseGenerator = new TestCaseGenerator(apiKey, provider);
+      console.log(`[AI] Reinitialized with ${provider}`);
+    }
   });
 
   // Mark as registered

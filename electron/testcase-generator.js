@@ -11,7 +11,8 @@ class TestCaseGenerator {
     this.modelMap = {
       'groq': 'llama-3.1-8b-instant',
       'grok': 'grok-beta',
-      'openai': 'gpt-4o-mini'
+      'openai': 'gpt-4o-mini',
+      'mistral': 'mistral-small-latest'
     };
 
     if (provider === 'openai') {
@@ -25,6 +26,11 @@ class TestCaseGenerator {
       this.client = new OpenAI({
         apiKey,
         baseURL: 'https://api.x.ai/v1'
+      });
+    } else if (provider === 'mistral') {
+      this.client = new OpenAI({
+        apiKey,
+        baseURL: 'https://api.mistral.ai/v1'
       });
     }
 

@@ -62,4 +62,14 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Test Generation Progress
   onGenerationProgress: (callback) => ipcRenderer.on('generation-progress', (event, data) => callback(data)),
+
+  // Settings
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
+  updateLLMSettings: (provider, apiKey) => ipcRenderer.invoke('update-llm-settings', { provider, apiKey }),
+  hasApiKey: () => ipcRenderer.invoke('has-api-key'),
+
+  // Test Context
+  saveTestContext: (context) => ipcRenderer.invoke('save-test-context', context),
+  getTestContext: () => ipcRenderer.invoke('get-test-context'),
 });

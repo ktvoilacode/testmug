@@ -6,6 +6,7 @@
 const path = require('path');
 const { generateFlowScripts, saveFlowScripts } = require('../playwright-codegen');
 const ExcelGenerator = require('../excel-generator');
+const { settingsStorage } = require('./settings-handlers');
 
 /**
  * Register all test-related IPC handlers
@@ -114,6 +115,16 @@ function registerTestHandlers(ipcMain, dependencies) {
 
     if (!sessionStorage || !flowAnalyzer || !testCaseGenerator) {
       return { success: false, message: 'Not initialized' };
+    }
+
+    // Check if API key is configured
+    if (!settingsStorage.hasApiKey()) {
+      console.log('[IPC] No API key configured');
+      return {
+        success: false,
+        message: 'API key not configured. Please configure your LLM provider and API key in Settings.',
+        needsApiKey: true
+      };
     }
 
     try {
